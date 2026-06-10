@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Login — Stonixra POS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Playfair+Display:wght@600;700;800;900&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:Inter,system-ui,Arial,sans-serif}
+:root{--bg:#0c0c11;--card:#16161d;--text:#f1ece1;--muted:#9a948a;--line:#2b2b35;--blue:#d4af37;--blue-d:#b8912f;--dark:#0a0a0e;--green:#3ec46b;--red:#ff6b6b;--orange:#ff7a2f;--yellow:#e7c873}
+body{background:var(--bg);color:var(--text);min-height:100vh;display:grid;place-items:center;padding:22px}
+.login-wrap{width:100%;max-width:1040px;display:grid;grid-template-columns:1.05fr .95fr;background:#16161d;border:1px solid var(--line);border-radius:22px;overflow:hidden;box-shadow:0 18px 55px rgba(20,30,60,.10)}
+.brand-side{background:linear-gradient(135deg,#b8912f,#d4af37,#e7c873);color:#fff;padding:44px;position:relative;min-height:560px;display:flex;flex-direction:column;justify-content:space-between}
+.brand-side:after{content:"";position:absolute;right:-80px;bottom:-80px;width:260px;height:260px;border-radius:50%;background:rgba(255,255,255,.12)}
+.logo{display:flex;align-items:center;gap:12px;font-weight:900;font-size:18px}.logo-mark{width:42px;height:42px;border-radius:12px;background:rgba(255,255,255,.18);display:grid;place-items:center;font-weight:900}.brand-side h1{font-size:44px;line-height:1.05;margin:28px 0 14px;letter-spacing:-.04em}.brand-side p{color:#e9eeff;line-height:1.7;max-width:430px}.mini-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:28px}.mini{background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.18);border-radius:14px;padding:14px}.mini b{display:block;font-size:22px}.mini span{font-size:11px;color:#e8eeff;font-weight:700}
+.form-side{padding:44px;display:flex;flex-direction:column;justify-content:center}.form-side h2{font-size:30px;margin-bottom:6px;letter-spacing:-.03em}.form-side p{color:#6b7280;font-size:13.5px;margin-bottom:24px}.field{margin-bottom:14px}.field label{display:block;font-size:12px;font-weight:900;color:#3c4656;margin-bottom:7px;text-transform:uppercase;letter-spacing:.04em}.input{width:100%;padding:13px 14px;border:1px solid #2b2b35;border-radius:10px;background:#16161d;font-size:14px;outline:0}.input:focus{border-color:var(--blue)}.row{display:flex;justify-content:space-between;align-items:center;margin:6px 0 18px;font-size:13px;color:#6b7280}.row a{color:var(--blue);font-weight:800;text-decoration:none}.btn{border:0;border-radius:10px;padding:13px 18px;font-weight:900;cursor:pointer;font-size:14px;text-decoration:none;text-align:center;display:block}.btn.blue{background:var(--blue);color:#fff}.btn.light{background:#16161d;border:1px solid #2b2b35;color:#374151;margin-top:10px}.note{margin-top:18px;background:#1e1e27;border:1px solid var(--line);border-radius:13px;padding:13px;color:#6b7280;font-size:12.5px;line-height:1.55}.back{position:fixed;left:22px;top:22px;color:#3c4656;text-decoration:none;font-weight:800;background:#16161d;border:1px solid var(--line);border-radius:10px;padding:10px 13px}
+@media(max-width:820px){.login-wrap{grid-template-columns:1fr}.brand-side{min-height:auto;padding:30px}.brand-side h1{font-size:34px}.form-side{padding:30px}.mini-stats{grid-template-columns:1fr}}
+
+  /* ===== DARK LUXURY GOLD ===== */
+  body{background:#0c0c11;color:#f1ece1}
+  .login-wrap{background:#16161d;border:1px solid #2b2b35;box-shadow:0 18px 60px rgba(0,0,0,.6)}
+  .brand-side{background:linear-gradient(135deg,#1c1810,#2a2417,#15130c)}
+  .brand-side:after{background:rgba(212,175,55,.10)}
+  .logo-mark{background:rgba(212,175,55,.18);color:#e7c873}
+  .brand-side h1{color:#e7c873} .brand-side p{color:#cdbf9a}
+  .mini{background:rgba(255,255,255,.06);border:1px solid rgba(212,175,55,.18)} .mini b{color:#e7c873} .mini span{color:#cdbf9a}
+  .form-side h2{color:#f1ece1} .form-side p{color:#9a948a}
+  .field label{color:#8d877c}
+  .input{background:#23232e;border:1px solid #2b2b35;color:#f1ece1} .input:focus{border-color:#d4af37}
+  .input::placeholder{color:#6f6a60}
+  .row{color:#9a948a} .row a{color:#e7c873}
+  .btn.blue{background:linear-gradient(135deg,#b8912f,#e7c873);color:#15130c}
+  .btn.light{background:#1e1e27;border:1px solid #2b2b35;color:#f1ece1}
+  .note{background:#1e1e27;border:1px solid #2b2b35;color:#9a948a}
+  .back{background:#16161d;border:1px solid #2b2b35;color:#f1ece1}
+
+
+  /* ===== LUXURY BLACK-GOLD (final) ===== */
+  body{background:#0a0908!important;color:#f3ead2!important}
+  .login-wrap{background:#131210!important;border:1px solid rgba(212,175,55,.2)!important;box-shadow:0 18px 70px rgba(0,0,0,.7)!important}
+  .brand-side{background:linear-gradient(150deg,#17120a,#221a0c,#0d0a05)!important}
+  .brand-side:after{background:rgba(212,175,55,.10)!important}
+  .logo-mark{background:linear-gradient(135deg,#a67c1a,#d4af37,#f5e08a,#c9a227)!important;color:#120f06!important}
+  .brand-side h1{color:#f0d97a!important} .brand-side p{color:#cdbf95!important}
+  .mini{background:rgba(212,175,55,.08)!important;border:1px solid rgba(212,175,55,.22)!important} .mini b{color:#f0d97a!important} .mini span{color:#cdbf95!important}
+  .form-side h2{color:#f0d97a!important} .form-side p{color:#9c9176!important}
+  .field label{color:#8c836c!important}
+  .input{background:#221d16!important;border:1px solid rgba(212,175,55,.2)!important;color:#f3ead2!important} .input:focus{border-color:#d4af37!important}
+  .input::placeholder{color:#6f6857!important}
+  .row{color:#9c9176!important} .row a{color:#f0d97a!important}
+  .btn.blue{background:linear-gradient(135deg,#a67c1a,#d4af37,#f5e08a,#c9a227)!important;color:#120f06!important}
+  .btn.light{background:#1a1713!important;border:1px solid rgba(212,175,55,.2)!important;color:#f3ead2!important}
+  .note{background:#1a1713!important;border:1px solid rgba(212,175,55,.16)!important;color:#9c9176!important}
+  .back{background:#131210!important;border:1px solid rgba(212,175,55,.2)!important;color:#f3ead2!important}
+
+
+  /* ===== LUXURY SERIF TYPOGRAPHY ===== */
+  .logo,.hero h1,.h2,.cta h2,.feature h3,.step h3,.price h3,.price .amt,.brand-side h1,.form-side h2,.ms-top{font-family:'Playfair Display',Georgia,serif!important}
+  .hero h1{letter-spacing:0!important;font-weight:800!important}
+  .logo,.brand-side h1{letter-spacing:.4px!important}
+  body{background:#080706!important}
+
+</style>
+</head>
+<body>
+<a class="back" href="index.html">← Back</a>
+<div class="login-wrap">
+  <section class="brand-side">
+    <div>
+      <div class="logo"><div class="logo-mark">S</div> Stonixra POS</div>
+      <h1>Premium restaurant POS dashboard.</h1>
+      <p>Manage orders, tables, billing, staff, reports and inventory from one clean restaurant system.</p>
+      <div class="mini-stats"><div class="mini"><b>24/7</b><span>Operations</span></div><div class="mini"><b>RM</b><span>Billing</span></div><div class="mini"><b>CSV</b><span>Reports</span></div></div>
+    </div>
+    <p>Demo login: use any email and password to open the live POS preview.</p>
+  </section>
+  <section class="form-side">
+    <h2>Welcome back</h2>
+    <p>Login to continue to your restaurant POS workspace.</p>
+    <div class="field"><label>Email Address</label><input class="input" type="email" placeholder="admin@stonixra.com"></div>
+    <div class="field"><label>Password</label><input class="input" type="password" placeholder="••••••••"></div>
+    <div class="row"><label><input type="checkbox" checked> Remember me</label><a href="#">Forgot password?</a></div>
+    <a class="btn blue" href="app.html">Login to Dashboard</a>
+    <a class="btn light" href="app.html">Open POS Demo</a>
+    <div class="note">This is a frontend demo version. Backend database, real authentication and live payment integration can be connected later.</div>
+  </section>
+</div>
+</body>
+</html>
