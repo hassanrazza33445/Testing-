@@ -1575,6 +1575,63 @@ function deleteRecipe(id){
 }
 function deductRecipeDemo(){const o=orders.find(x=>x.no===selNo)||orders[0]; if(!o){toast('No order selected');return;} o.items.forEach(it=>{(recipes[it.id]||[]).forEach(r=>{const inv=inventory.find(x=>x.i===r.i); if(inv){inv.q=Math.max(0,Number(inv.q)-(r.q*it.qty)); inv.s=inv.q===0?'out':inv.q<=8?'low':'good';}})}); toast('Stock auto deducted for '+o.no); go('inventory');}
 
+
+
+/* ---------- DAILY CLOSING + KOT PRINTER FIX ---------- */
+function paidTodayOrders(){
+  return orders.filter(o=>o.status==='Paid' || o.status==='Completed' || o.closedSale);
+}
+function closingAutoData(){
+  const paid=paidTodayOrders();
+  const unpaid=orders.filter(o=>!(o.status==='Paid' || o.status==='Completed' || o.closedSale));
+  const totalSales=paid.reduce((sum,o)=>sum+totals(o).total,0);
+  const cash=paid.filter(o=>(o.pay||o.paymentMethod||'Cash')==='Cash').reduce((sum,o)=>sum+totals(o).total,0);
+  const card=paid.filter(o=>['Card','Debit Card'].includes(o.pay||o.paymentMethod)).reduce((sum,o)=>sum+totals(o).total,0);
+  const qr=paid.filter(o=>['QR','QR Pay','TNG','Touch n Go'].includes(o.pay||o.paymentMethod)).reduce((sum,o)=>sum+totals(o).total,0);
+  const todayExpenses = typeof todayExpenseRows==='function' ? todayExpenseRows() : [];
+  const expenseTotal = todayExpenses.reduce((s,e)=>s+Number(e.amount||0),0);
+  const cashExpense = todayExpenses.filter(e=>(e.method||'Cash')==='Cash').reduce((s,e)=>s+Number(e.amount||0),0);
+  const expected=(Number(cashierShift.opening)||0)+cash-cashExpense;
+  const actual=(cashierShift.actualCash===null||cashierShift.actualCash===undefined)?expected:Number(cashierShift.actualCash)||0;
+  const diff=actual-expected;
+  return {paid,unpaid,totalSales,cash,card,qr,expenseTotal,cashExpense,expected,actual,diff};
+}
+function setPayment(no,method){const o=orders.find(x=>x.no===no); if(o){o.pay=method; o.paymentMethod=method; toast(no+' payment set: '+method); render();}}
+function closeShiftAuto(){
+  const d=closingAutoData();
+  cashierShift.closed=true;
+  cashierShift.closedAt=new Date().toLocaleString();
+  cashierShift.lastClosing={opening:cashierShift.opening,cash:d.cash,card:d.card,qr:d.qr,expenses:d.expenseTotal,cashExpenses:d.cashExpense,expected:d.expected,actual:d.actual,difference:d.diff,orders:d.paid.length};
+  toast('Automatic closing saved');
+  render();
+}
+function closingView(){
+  const d=closingAutoData();
+  return head('Daily Closing','Auto closing is locked for cashier. Owner/Admin can edit opening cash and expenses from Admin Panel.')+
+  `<div class="stats"><div class="stat"><small>Opening Cash</small><h2>${rm(cashierShift.opening||0)}</h2></div><div class="stat"><small>Auto Total Sales</small><h2>${rm(d.totalSales)}</h2></div><div class="stat"><small>Expenses</small><h2 style="color:var(--red)">${rm(d.expenseTotal)}</h2></div><div class="stat"><small>Expected Cash Closing</small><h2>${rm(d.expected)}</h2></div></div>
+  <div class="grid3" style="grid-template-columns:1.1fr 1fr"><section class="panel" style="padding:18px"><h3>Automatic Closing Sheet</h3><div class="admin-lock">🔒 Opening cash, expenses and cash count are locked for cashier. Owner/Admin only.</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px"><div><small style="font-weight:900;color:var(--muted)">Opening Cash</small><input class="input readonly-field" readonly value="${cashierShift.opening||0}"></div><div><small style="font-weight:900;color:var(--muted)">Expenses</small><input class="input readonly-field" readonly value="${d.expenseTotal.toFixed(2)}"></div><div><small style="font-weight:900;color:var(--muted)">Counted Cash</small><input class="input readonly-field" readonly value="${d.actual.toFixed(2)}"></div><div><small style="font-weight:900;color:var(--muted)">Difference</small><input class="input readonly-field" readonly value="${rm(d.diff)}" style="font-weight:900;color:${d.diff<0?'var(--red)':'var(--green)'}"></div></div><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px"><div class="mini-card"><small>Cash Sales</small><b>${rm(d.cash)}</b></div><div class="mini-card"><small>Card Sales</small><b>${rm(d.card)}</b></div><div class="mini-card"><small>QR/TNG Sales</small><b>${rm(d.qr)}</b></div></div><div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap"><button class="btn green" onclick="closeShiftAuto()">Close Shift Automatically</button><button class="btn light" onclick="openAdminClosingModal()">Owner/Admin Edit</button><button class="btn dark" onclick="window.print()">Print Closing</button>${cashierShift.closed?`<span class="pill green-pill">Closed ${cashierShift.closedAt||''}</span>`:''}</div></section>
+  <section class="panel" style="padding:18px"><h3>Order Payment Summary</h3><div style="margin-top:12px;display:grid;gap:9px;max-height:330px;overflow:auto">${d.paid.map(o=>`<div style="border:1px solid var(--line);border-radius:10px;padding:10px;display:flex;justify-content:space-between;gap:8px;align-items:center"><div><b>${o.no}</b><br><small>Paid · ${o.pay||o.paymentMethod||'Cash'} · ${o.table?'T'+o.table:typeMeta(o.type).l} · ${rm(totals(o).total)}</small></div><span class="pill green-pill">Closed Sale</span></div>`).join('')||'<p style="color:var(--muted)">No paid orders yet.</p>'}</div><div style="margin-top:12px;color:var(--muted);font-size:13px">Paid orders included: <b>${d.paid.length}</b><br>Unpaid orders not included: <b>${d.unpaid.length}</b></div></section></div>`;
+}
+function openAdminClosingModal(){
+  const d=closingAutoData();
+  openFormModal('Owner/Admin Closing Setup',[{name:'opening',label:'Opening Cash',type:'number',value:cashierShift.opening||0},{name:'actual',label:'Counted Cash',type:'number',value:d.actual.toFixed(2)}],x=>{cashierShift.opening=parseFloat(x.opening)||0;cashierShift.actualCash=parseFloat(x.actual)||0;toast('Closing settings updated by Owner/Admin');});
+}
+function kotPrinterView(){
+  return head('Auto KOT Printer','Auto print Kitchen Order Ticket when waiter sends order to kitchen')+
+  `<div class="stats"><div class="stat"><small>Auto Print</small><h2 style="color:${kotAutoPrint?'var(--green)':'var(--red)'}">${kotAutoPrint?'ON':'OFF'}</h2></div><div class="stat"><small>Copies</small><h2>${kotCopies}</h2></div><div class="stat"><small>Printers</small><h2>${Object.keys(printerMap).length}</h2></div><div class="stat"><small>KOT Logs</small><h2>${kotLogs.length}</h2></div></div>
+  <section class="panel" style="padding:18px;margin-bottom:16px"><h3>Printer Mapping</h3><div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:14px">${Object.keys(printerMap).map(k=>`<div><label style="font-weight:900;font-size:12px;color:var(--muted)">${k}</label><input class="input" value="${printerMap[k]}" onchange="printerMap['${k}']=this.value"></div>`).join('')}</div><div style="display:flex;gap:8px;margin-top:14px"><button class="btn ${kotAutoPrint?'green':'light'}" onclick="kotAutoPrint=!kotAutoPrint;render()">${kotAutoPrint?'Auto Print ON':'Auto Print OFF'}</button><button class="btn blue" onclick="printKOT(orders.find(o=>o.no===selNo)||orders[0])">Test Print KOT</button></div></section>`+
+  panelTable(['Time','Order','Station','Printer','Status'],kotLogs.slice().reverse().map(l=>[l.time,l.order,l.station,l.printer,l.status]));
+}
+function printKOT(o){
+  if(!o){toast('No order for KOT');return;}
+  const groups={};
+  o.items.forEach(i=>{const st=stationOf(i); (groups[st]=groups[st]||[]).push(i);});
+  Object.keys(groups).forEach(st=>kotLogs.push({time:new Date().toLocaleTimeString(),order:o.no,station:st,printer:printerMap[st==='Main Kitchen'?'Main':st]||printerMap.Main,status:'Printed'}));
+  const html=`<!doctype html><html><head><title>KOT ${o.no}</title><style>body{font-family:Arial;padding:10px}.ticket{width:270px}.c{text-align:center}.line{border-top:1px dashed #0B0B0B;margin:8px 0}h2{margin:0;font-size:20px}.item{display:flex;justify-content:space-between;font-size:16px;margin:6px 0}.note{font-weight:bold;background:#eee;padding:6px;margin-top:8px}</style></head><body>${Object.keys(groups).map(st=>`<div class="ticket"><div class="c"><h2>KOT ${o.no}</h2><b>${st}</b><br>${o.table?'Table T'+o.table:typeMeta(o.type).l}<br>${new Date().toLocaleString()}</div><div class="line"></div>${groups[st].map(i=>`<div class="item"><b>${i.qty} x ${i.name}</b></div>`).join('')}<div class="line"></div></div><div style="page-break-after:always"></div>`).join('')}<script>window.print()<\/script></body></html>`;
+  const w=window.open('','_blank'); if(w){w.document.write(html);w.document.close();}
+  toast('KOT printed for '+o.no); render();
+}
+
 /* ---------- TOAST ---------- */
 let tT;function toast(m){const t=document.getElementById("toast");document.getElementById("toastmsg").textContent=m;t.classList.add("show");clearTimeout(tT);tT=setTimeout(()=>t.classList.remove("show"),1600);}
 
