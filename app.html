@@ -675,23 +675,17 @@ const ROLE_NAV={
 };
 
 /* ---------- DATA ---------- */
-let orders=[
-  {no:"#1011",inv:uid(),type:"dine",table:"04",status:"Unpaid",stage:1,age:"2 min ago",
-   items:[{id:8,name:"Plain Naan",price:3,qty:4},{id:1,name:"Chicken Seekh Kabab 2pc",price:15,qty:2},{id:5,name:"Chicken Biryani",price:15,qty:1},{id:7,name:"Chicken Achari New",price:15,qty:1},{id:13,name:"Mango Lassi",price:7,qty:2}]},
-  {no:"#1012",inv:uid(),type:"take",table:null,status:"Unpaid",stage:1,age:"12 min ago",
-   items:[{id:11,name:"Chicken Karahi",price:35,qty:1},{id:14,name:"Soft Drink",price:5,qty:2}]},
-  {no:"#1013",inv:uid(),type:"dine",table:"08",status:"Paid",stage:2,age:"6 min ago",
-   items:[{id:6,name:"Mutton Biryani",price:20,qty:1},{id:9,name:"Garlic Naan",price:5,qty:3},{id:15,name:"Fresh Juice",price:9,qty:2}]},
-];
-let seq=1014, selNo="#1011", tab="running";
-let tables=Array.from({length:12},(_,i)=>({n:i+1,occ:[2,4,7,8].includes(i+1)}));
-let bookings=[{c:"Ali Khan",t:"T03",time:"8:30 PM",g:4,s:"Reserved"},{c:"Sarah Lee",t:"T06",time:"9:00 PM",g:2,s:"Confirmed"},{c:"Corporate",t:"T01",time:"8:00 PM",g:12,s:"Pending"}];
-let serviceReqs=[{t:"T04",r:"Extra plates",w:"Ahmed",s:"Pending"},{t:"T08",r:"Bill request",w:"Saad",s:"Done"},{t:"T02",r:"Call waiter",w:"Ali",s:"Pending"}];
-let staff=[{u:"Shahid Hanif",d:"Owner",l:"Subang",s:"Present",ci:"09:10"},{u:"Mr. Nafis",d:"Manager",l:"Puncak Alam",s:"Present",ci:"10:00"},{u:"Saad",d:"Cashier",l:"Nilai",s:"Absent",ci:"-"}];
-let inventory=[{i:"Chicken",q:12,u:"kg",s:"low"},{i:"Beef",q:0,u:"kg",s:"out"},{i:"Basmati Rice",q:80,u:"kg",s:"good"},{i:"Flour",q:40,u:"kg",s:"good"},{i:"Yogurt",q:6,u:"L",s:"low"},{i:"Cooking Oil",q:18,u:"L",s:"good"}];
-let promos=[{c:"5OFF",t:"Get 5% OFF",ty:"Dine-In",s:"Active"},{c:"LUNCH10",t:"Lunch Deal",ty:"Takeaway",s:"Active"},{c:"FREEDEL",t:"Free Delivery",ty:"Delivery",s:"Off"}];
-let customers=[{n:"Ali Khan",p:"+60 12-345 7788",o:8,sp:642,l:"Gold"},{n:"Sarah Lee",p:"+60 11-876 2233",o:5,sp:385,l:"Silver"},{n:"Corporate Client",p:"+60 3-8822 9911",o:14,sp:2350,l:"VIP"}];
-let branches=[{n:"Nilai",orders:42,sales:1880,status:"Online"},{n:"Subang",orders:61,sales:2650,status:"Online"},{n:"Puncak Alam",orders:27,sales:1140,status:"Online"},{n:"Ara Damansara",orders:19,sales:790,status:"Offline"}];
+let orders=[];
+let salesLog=[]; /* real sales records, grows when orders are settled */
+let seq=1001, selNo=null, tab="running";
+let tables=Array.from({length:12},(_,i)=>({n:i+1,occ:false}));
+let bookings=[];
+let serviceReqs=[];
+let staff=[];
+let inventory=[];
+let promos=[];
+let customers=[];
+let branches=[];
 let rolePerms=[{role:"Admin",perms:"Full access, reports, settings"},{role:"Manager",perms:"Orders, inventory, reports"},{role:"Cashier",perms:"Billing, receipts, customers"},{role:"Waiter",perms:"Create orders, table service"},{role:"Kitchen",perms:"KDS only, update status"}];
 let openRoleIndex=null;
 let barcodeText="";
@@ -746,7 +740,7 @@ function render(){
 function posView(){
   const running=orders;
   const dine=running.filter(o=>o.type==="dine").length, take=running.filter(o=>o.type==="take").length;
-  const todaySales=orders.reduce((s,o)=>s+totals(o).total,0)+5240;
+  const todaySales=orders.reduce((s,o)=>s+totals(o).total,0);
   const sel=orders.find(o=>o.no===selNo);
   return `
   <div class="top-head">
@@ -831,7 +825,7 @@ function selectOrder(no){selNo=no;render();}
 function qty(no,id,d){const o=orders.find(x=>x.no===no);const it=o.items.find(i=>i.id===id);it.qty+=d;if(it.qty<=0)o.items=o.items.filter(i=>i.id!==id);render();}
 function setStage(no,s){orders.find(x=>x.no===no).stage=s;render();}
 function nextStage(no){const o=orders.find(x=>x.no===no);if(o.stage<3)o.stage++;toast("Stage: "+FLOW[o.stage]);render();}
-function settle(no){orders.find(x=>x.no===no).status="Paid";toast(no+" settled");render();}
+function settle(no){const o=orders.find(x=>x.no===no); if(!o)return; o.status="Paid"; const dt=new Date(); salesLog.push({key:dt.getFullYear()+"-"+(dt.getMonth()+1)+"-"+dt.getDate(), sales:totals(o).total}); toast(no+" settled"); render();}
 function complete(no){orders=orders.filter(x=>x.no!==no);selNo=orders[0]?orders[0].no:null;toast(no+" completed");render();}
 
 /* ---------- TABLES ---------- */
@@ -870,7 +864,7 @@ function promoView(){
 let rPreset="today",rFrom="2026-05-25",rTo="2026-06-08";
 const TODAY=new Date(2026,5,8);
 const addDays=(d,n)=>{const x=new Date(d);x.setDate(x.getDate()+n);return x;};
-function salesFor(date){const seed=date.getFullYear()*1000+(date.getMonth()+1)*50+date.getDate();const r=Math.abs(Math.sin(seed)*1e4)%1;const dow=date.getDay();const b=(dow===5||dow===6)?1.5:dow===0?1.3:1;const o=Math.round((30+r*70)*b);return{orders:o,sales:Math.round(o*(28+r*22)*100)/100};}
+function salesFor(date){const key=date.getFullYear()+"-"+(date.getMonth()+1)+"-"+date.getDate();const rows=salesLog.filter(r=>r.key===key);return{orders:rows.length,sales:Math.round(rows.reduce((s,r)=>s+r.sales,0)*100)/100};}
 function rangeFor(k){const t=TODAY;if(k==="today")return[t,t];if(k==="yesterday"){const y=addDays(t,-1);return[y,y];}if(k==="week")return[addDays(t,-6),t];if(k==="thismonth")return[new Date(t.getFullYear(),t.getMonth(),1),t];if(k==="lastmonth")return[new Date(t.getFullYear(),t.getMonth()-1,1),new Date(t.getFullYear(),t.getMonth(),0)];if(k==="custom")return[new Date(rFrom),new Date(rTo)];return[t,t];}
 function buildRange(s,e){const out=[];let d=new Date(s);while(d<=e){out.push({label:d.getDate()+"/"+(d.getMonth()+1),dow:d.toLocaleDateString('en',{weekday:'short'}),...salesFor(d)});d=addDays(d,1);}return out;}
 function reportView(){
