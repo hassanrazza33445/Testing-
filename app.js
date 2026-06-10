@@ -1289,6 +1289,131 @@ function toggleTheme(){
   const b=document.getElementById('themeBtn'); if(b)b.textContent=isLight?'☀️ Light':'🌙 Dark';
 }
 
+
+
+/* ---------- FINAL STABILITY + UI FIXES PATCH ---------- */
+const POS_LOCAL_KEY='stonixra_pos_state_v2';
+function saveLocalState(){
+  try{localStorage.setItem(POS_LOCAL_KEY, JSON.stringify({...appState(), _updatedAt:Date.now()}));}
+  catch(e){console.warn('Local save skipped', e);}
+}
+function loadLocalState(){
+  try{const raw=localStorage.getItem(POS_LOCAL_KEY); if(!raw)return false; const st=JSON.parse(raw); applyState(st); return true;}catch(e){console.warn('Local load failed',e); return false;}
+}
+const _stableSaveCloud=saveCloud;
+saveCloud=async function(show=true){
+  saveLocalState();
+  // Prevent Supabase statement timeout for very large state payloads such as receipt/base64 images.
+  const payloadState=appState();
+  let json=''; try{json=JSON.stringify(payloadState);}catch(e){json='';}
+  if(!initSupabase() || json.length>380000){ if(show)toast('Saved locally'); return; }
+  const payload={app:'stonixra_pos',key:'state',value:{...payloadState,_updatedAt:Date.now()},updated_at:new Date().toISOString()};
+  try{
+    const {error}=await db.from('pos_data').upsert(payload,{onConflict:'app,key'});
+    if(error){ if(show)toast('Saved locally. Cloud save issue: '+error.message); return; }
+    if(show)toast('Saved');
+  }catch(e){ if(show)toast('Saved locally. Cloud connection slow'); }
+};
+queueSave=function(){ if(!hydrated)return; clearTimeout(saveTimer); saveLocalState(); saveTimer=setTimeout(()=>saveCloud(false),1200); };
+loadCloud=async function(){
+  const hasLocal=!!localStorage.getItem(POS_LOCAL_KEY);
+  if(hasLocal){ loadLocalState(); renderNav(); render(); toast('Local data loaded'); return; }
+  if(!initSupabase()){toast('Saved local mode');return;}
+  const {data,error}=await db.from('pos_data').select('value').eq('app','stonixra_pos').eq('key','state').maybeSingle();
+  if(error){toast('Cloud load issue. Local mode active');return;}
+  if(data?.value){applyState(data.value);renderNav();render();toast('Supabase data loaded'); saveLocalState();}
+  else{toast('No cloud data found');}
+};
+loadCloudSilent=function(){ /* disabled to prevent old cloud state overwriting current local work */ };
+
+function cleanLineGraph(rows,metric='sales',titleOverride=''){
+  const title=titleOverride || (metric==='sales'?'Day total':'Orders per day');
+  const vals=(rows&&rows.length)?rows.map(r=>Number(r[metric]||0)):[0];
+  const rawMax=Math.max(...vals, metric==='sales'?10:1);
+  const max=metric==='orders'?Math.max(5,Math.ceil(rawMax)):rawMax*1.25;
+  const w=1120,h=300,left=135,right=50,top=38,bottom=62,innerW=w-left-right,innerH=h-top-bottom;
+  const xFor=i=>left+(vals.length<=1?innerW/2:i*innerW/(vals.length-1));
+  const yFor=v=>top+innerH-(v/max)*innerH;
+  const ticks=[1,.75,.5,.25,0];
+  const labels=ticks.map(fr=>{const y=top+innerH-fr*innerH; const val=max*fr; const txt=metric==='sales'?rm(val):String(Math.round(val)); return `<line x1="${left}" y1="${y}" x2="${w-right}" y2="${y}" stroke="rgba(0,0,0,.10)"/><text x="${left-24}" y="${y+5}" font-size="14" text-anchor="end" fill="#8f846f">${txt}</text>`}).join('');
+  const pts=vals.map((v,i)=>[xFor(i),yFor(v)]);
+  const line = vals.length>1
+    ? `<polyline points="${pts.map(p=>p.join(',')).join(' ')}" fill="none" stroke="#d4af37" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>`
+    : `<line x1="${xFor(0)-90}" y1="${yFor(vals[0])}" x2="${xFor(0)+90}" y2="${yFor(vals[0])}" stroke="#d4af37" stroke-width="4" stroke-linecap="round"/>`;
+  const area = vals.length>1 ? `${xFor(0)},${top+innerH} ${pts.map(p=>p.join(',')).join(' ')} ${xFor(vals.length-1)},${top+innerH}` : `${xFor(0)-90},${top+innerH} ${xFor(0)-90},${yFor(vals[0])} ${xFor(0)+90},${yFor(vals[0])} ${xFor(0)+90},${top+innerH}`;
+  const pointLabels=pts.map((p,i)=>`<circle cx="${p[0]}" cy="${p[1]}" r="6" fill="#d4af37" stroke="#fff" stroke-width="2"/><text x="${p[0]}" y="${Math.max(22,p[1]-14)}" text-anchor="middle" font-size="13" font-weight="700" fill="#8a6a00">${metric==='sales'?rm(vals[i]):vals[i]}</text><text x="${p[0]}" y="${h-22}" text-anchor="middle" font-size="13" fill="#8f846f">${rows[i]?shortDate(rows[i].key):''}</text>`).join('');
+  return `<section class="panel chart-panel" style="padding:20px;margin-top:16px"><h3 style="margin-bottom:14px">${title}</h3><svg viewBox="0 0 ${w} ${h}" style="width:100%;height:330px;display:block;overflow:visible">${labels}<polygon points="${area}" fill="rgba(212,175,55,.16)"/>${line}${pointLabels}</svg></section>`;
+}
+simpleLineGraph=cleanLineGraph; polishedLineGraph=cleanLineGraph;
+reportView=function(){
+  const rows=groupSalesByDay(filteredSales(1));
+  const total=rows.reduce((s,r)=>s+r.sales,0), ordersCount=rows.reduce((s,r)=>s+r.orders,0), avg=ordersCount?total/ordersCount:0;
+  const best=rows.slice().sort((a,b)=>b.sales-a.sales)[0];
+  return head('Sales Report','Smart POS · 1 day(s)','<button class="btn dark" onclick="window.print()">Download Report</button>')+
+  `<section class="panel" style="padding:14px 18px;display:flex;gap:10px;flex-wrap:wrap"><button class="chip gold">Today</button><button class="chip">Yesterday</button><button class="chip">Last 7 Days</button><button class="chip">This Month</button><button class="chip">Last Month</button><button class="chip">Custom</button></section>`+
+  `<div class="stats"><div class="stat"><small>Total Sales</small><h2>${rm(total)}</h2></div><div class="stat"><small>Total Orders</small><h2>${ordersCount}</h2></div><div class="stat"><small>Avg Order</small><h2>${rm(avg)}</h2></div><div class="stat"><small>Best Day</small><h2>${best?`${shortDate(best.key)} · ${rm(best.sales)}`:'—'}</h2></div></div>`+
+  cleanLineGraph(rows,'sales','Day total')+panelTable(['Date','Day','Orders','Avg/Order','Sales'],rows.map(r=>[shortDate(r.key),dayName(r.key),r.orders,rm(r.orders?r.sales/r.orders:0),`<b>${rm(r.sales)}</b>`]));
+};
+analyticsView=function(){
+  const rows=groupSalesByDay(filteredSales(7));
+  const total=rows.reduce((s,r)=>s+r.sales,0), count=rows.reduce((s,r)=>s+r.orders,0), avg=count?total/count:0;
+  const paid=filteredSales(7); const typeSum=t=>paid.filter(r=>(r.type||'take')===t).reduce((s,r)=>s+Number(r.sales||0),0);
+  const dine=typeSum('dine'), take=typeSum('take'), del=typeSum('delivery');
+  return head('Restaurant Analytics','Smart POS · Last 7 days')+
+  `<div class="stats"><div class="stat"><small>Total Revenue</small><h2>${rm(total)}</h2></div><div class="stat"><small>Order Count</small><h2>${count}</h2></div><div class="stat"><small>Avg Order</small><h2>${rm(avg)}</h2></div><div class="stat"><small>Peak Time</small><h2>8 PM</h2></div></div>`+
+  cleanLineGraph(rows,'orders','Orders per day')+panelTable(['Order Type','Share','Revenue'],[['Dine-In',total?Math.round((dine/total)*100)+'%':'0%',rm(dine)],['Takeaway',total?Math.round((take/total)*100)+'%':'0%',rm(take)],['Delivery',total?Math.round((del/total)*100)+'%':'0%',rm(del)]]);
+};
+
+function promoTypeCards(){
+  const types=[['bill','Bill Discount','Entire bill discount after minimum amount'],['dish','Dish Discount','Discount on a specific dish'],['category','Category Discount','Discount on selected category'],['student','Student Discount','Student/customer type discount'],['bogo','BOGO / Free Item','Buy 1 Get 1 or free item offer']];
+  return `<div class="grid3" style="grid-template-columns:repeat(auto-fit,minmax(210px,1fr));margin-bottom:16px">${types.map(t=>`<button class="panel" style="padding:16px;text-align:left;cursor:pointer;border:1px solid var(--line)" onclick="addCouponType('${t[0]}')"><h3>${t[1]}</h3><p style="color:var(--muted);font-size:13px;margin-top:6px">${t[2]}</p></button>`).join('')}</div>`;
+}
+promoView=function(){
+  const rows=promos.map((p,i)=>{const val=p.discountType==='Percentage (%)'?`${p.value||0}%`:p.discountType==='Fixed Amount (RM)'?rm(p.value||0):(p.discountType||'-'); const condition=[p.applyOn||'-',Number(p.minBill)>0?'Min '+rm(p.minBill):'',p.dish&&p.dish!=='Any'?p.dish:'',p.category&&p.category!=='Any'?p.category:'',p.customerType&&p.customerType!=='All Customers'?p.customerType:''].filter(Boolean).join(' · '); return [`<b>${p.c}</b>`,p.t||'Discount',p.promoKind||p.applyOn||'-',val,condition,`${p.start||'—'} → ${p.end||'—'}`,`${p.used||0}/${p.limit||'∞'}`,`<span class="pill ${p.s==='Inactive'?'red-pill':'green-pill'}">${p.s||'Active'}</span>`,`<button class="chip" onclick="editCoupon(${i})">Edit</button> <button class="chip" style="color:var(--red)" onclick="deleteCoupon(${i})">Delete</button>`];});
+  return head('Promotions','Choose a promotion type, then fill only the relevant fields','<button class="btn dark" onclick="addCouponChooser()">+ Add Coupon</button>')+
+  promoTypeCards()+`<div class="stats"><div class="stat"><small>Total Promotions</small><h2>${promos.length}</h2></div><div class="stat"><small>Active</small><h2>${promos.filter(p=>p.s!=='Inactive').length}</h2></div><div class="stat"><small>Used</small><h2>${promos.reduce((a,p)=>a+Number(p.used||0),0)}</h2></div><div class="stat"><small>Types</small><h2>${new Set(promos.map(p=>p.promoKind||p.applyOn)).size||0}</h2></div></div>`+panelTable(['Code','Title','Promotion Type','Value','Condition','Validity','Used/Limit','Status','Action'],rows);
+};
+function addCouponChooser(){toast('Select a promotion type card');}
+function addCoupon(){addCouponChooser();}
+function addCouponType(type){editCoupon(null,type);}
+editCoupon=function(idx,typeOverride){
+  const p=idx!==null?promos[idx]:{}; const kind=typeOverride||p.kind||'bill';
+  const dishOpts=['Any',...MENU.map(m=>m.name)]; const catOpts=['Any',...new Set(MENU.map(m=>m.cat))];
+  const fields=[{name:'c',label:'Coupon Code',value:p.c||'',placeholder:'SAVE10',required:true},{name:'t',label:'Promotion Title',value:p.t||'',placeholder:'Student Discount'}];
+  if(kind==='bogo') fields.push({name:'discountType',label:'Offer Type',type:'select',value:p.discountType||'Buy 1 Get 1',options:['Buy 1 Get 1','Free Item']});
+  else fields.push({name:'discountType',label:'Discount Type',type:'select',value:p.discountType||'Percentage (%)',options:['Percentage (%)','Fixed Amount (RM)']},{name:'value',label:'Discount Value',type:'number',value:p.value??10,note:'Example: 10 for 10% or RM10'});
+  if(kind==='bill') fields.push({name:'minBill',label:'Minimum Bill Amount (RM)',type:'number',value:p.minBill??0,placeholder:'100'});
+  if(kind==='dish'||kind==='bogo') fields.push({name:'dish',label:'Specific Dish',type:'select',value:p.dish||'Any',options:dishOpts});
+  if(kind==='category') fields.push({name:'category',label:'Specific Category',type:'select',value:p.category||'Any',options:catOpts});
+  if(kind==='student') fields.push({name:'customerType',label:'Customer Type',type:'select',value:'Student',options:['Student','Staff','VIP']});
+  fields.push({name:'start',label:'Start Date',type:'date',value:p.start||todayKey()},{name:'end',label:'End Date',type:'date',value:p.end||todayKey()},{name:'limit',label:'Usage Limit',type:'number',value:p.limit??0,note:'0 means unlimited'},{name:'s',label:'Status',type:'select',value:p.s||'Active',options:['Active','Inactive']});
+  const titles={bill:'Bill Discount',dish:'Dish Discount',category:'Category Discount',student:'Student Discount',bogo:'BOGO / Free Item'};
+  openFormModal((idx!==null?'Edit ':'Add ')+titles[kind],fields,d=>{const item={...p,kind,promoKind:titles[kind],c:(d.c||'').trim().toUpperCase(),t:d.t||titles[kind],discountType:d.discountType||'Percentage (%)',value:Number(d.value)||0,applyOn:kind==='bill'?'Entire Bill':kind==='dish'?'Specific Dish':kind==='category'?'Specific Category':kind==='student'?'Customer Type':'BOGO',dish:d.dish||'Any',category:d.category||'Any',minBill:Number(d.minBill)||0,customerType:d.customerType||'All Customers',start:d.start,end:d.end,limit:Number(d.limit)||0,used:p.used||0,s:d.s||'Active'}; if(!item.c){toast('Coupon code required');return false;} if(idx!==null)promos[idx]=item; else promos.push(item); toast(idx!==null?'Promotion updated':'Promotion added');});
+};
+
+staffView=function(){
+  const today=todayKey(); const present=staff.filter(s=>s.s==='On Duty').length; const checkedOut=staff.filter(s=>s.checkoutDate===today).length; const totalHours=staff.reduce((a,s)=>a+Number(s.hours||0),0);
+  const rows=staff.map((s,i)=>{let action=''; if(s.s==='On Duty'||(s.ci&&s.ci!=='-'&&!s.co)) action=`<button class="btn green" onclick="staffCheckOut(${i})">Check Out</button>`; else if(s.checkoutDate===today) action='<span class="pill green-pill">Completed Today</span>'; else action=`<button class="btn blue" onclick="staffCheckIn(${i})">Check In</button>`; return [`<b>${s.u}</b>`,s.d||'-',s.l||'Main Branch',s.ci||'-',s.co||'-',`${Number(s.hours||0).toFixed(2)} hrs`,pill(s.s||'Absent',s.s==='Absent'?'red':'green'),action];});
+  return head('Staff Center','Attendance, check-in/check-out and working hours','<button class="btn light" onclick="addStaff()">+ Add Staff</button><button class="btn dark" onclick="downloadCSV(\'staff-attendance\',[\'User\',\'Designation\',\'Location\',\'CheckIn\',\'CheckOut\',\'Hours\',\'Status\'],staff.map(s=>[s.u,s.d,s.l,s.ci||\'-\',s.co||\'-\',s.hours||0,s.s]))">Download Attendance</button>')+`<div class="stats"><div class="stat"><small>Total Staff</small><h2>${staff.length}</h2></div><div class="stat"><small>On Duty</small><h2>${present}</h2></div><div class="stat"><small>Completed Today</small><h2>${checkedOut}</h2></div><div class="stat"><small>Total Hours</small><h2>${totalHours.toFixed(2)}</h2></div></div>`+panelTable(['Staff','Role','Branch','Check In','Check Out','Hours','Status','Action'],rows);
+};
+staffCheckIn=function(i){const s=staff[i]; if(s.checkoutDate===todayKey()){toast(s.u+' already completed today');return;} s.ci=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});s.checkInTs=Date.now();s.checkInDate=todayKey();s.co='';s.s='On Duty';toast(s.u+' checked in');render();};
+staffCheckOut=function(i){const s=staff[i]; if(!(s.s==='On Duty'||(s.ci&&s.ci!=='-'&&!s.co))){toast('Staff is not checked in');return;} s.co=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});const ms=s.checkInTs?Date.now()-Number(s.checkInTs):0;s.hours=Number(s.hours||0)+(ms?ms/3600000:0);s.checkInTs=null;s.checkoutDate=todayKey();s.s='Checked Out';toast(s.u+' checked out');render();};
+
+// Ensure inventory route always renders inventory and not Daily Summary.
+function go(k){nav=k;renderNav();render();}
+const _stableRender=render;
+render=function(){
+  const m=document.getElementById('main');
+  const map={pos:posView,waiter:waiterView,quickpos:quickPosView,tables:tablesView,reports:reportView,closing:closingView,analytics:analyticsView,menu:menuView,recipes:recipesView,qr:qrView,promotions:promoView,staff:staffView,roles:rolesView,cashier:cashierFeaturesView,customers:customerFeaturesView,inventory:invView,expenses:expensesView,kotprinter:kotPrinterView,branches:branchesView,loyalty:loyaltyView,settings:settingsView};
+  const fn=map[nav]||posView;
+  m.innerHTML=fn();
+  queueSave();
+};
+
+// Hydrate local state before first render.
+loadLocalState();
+/* ---------- END STABILITY + UI FIXES PATCH ---------- */
+
 applyThemePref();
 renderNav();render();hydrated=true;
 if(dbReady){loadCloud(); setInterval(loadCloudSilent,6000);}
