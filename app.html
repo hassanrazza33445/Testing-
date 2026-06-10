@@ -1792,6 +1792,122 @@ function sendKitchen(no){const o=orders.find(x=>x.no===no); if(!o)return; o.stag
 /* ---------- TOAST ---------- */
 let tT;function toast(m){const t=document.getElementById("toast");document.getElementById("toastmsg").textContent=m;t.classList.add("show");clearTimeout(tT);tT=setTimeout(()=>t.classList.remove("show"),1600);}
 
+
+
+/* ---------- FINAL PATCH: STABILITY, SMOOTH UPDATES, TABLE STATUS, CHARTS ---------- */
+function escapeJS(v){return String(v||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/\n/g,' ');}
+function tableNoNorm(v){return String(v||'').replace(/^T/i,'').padStart(2,'0');}
+function findTableStatus(n){const nn=Number(String(n||'').replace(/^T/i,''));return safeTableList().find(t=>Number(t.n)===nn);}
+function setTableAuto(table,status){
+  if(!table||table==='—'||table==='-')return;
+  const t=findTableStatus(table);
+  if(t){t.s=status;t.guest=status==='available'?0:(t.guest||2);} 
+  const old=tables.find(x=>Number(x.n)===Number(String(table).replace(/^T/i,''))); if(old)old.occ=status==='occupied';
+}
+function syncTablesWithOrders(){
+  const activeTables=new Set((orders||[]).filter(o=>o.type==='dine' && o.status!=='Paid' && o.table && o.table!=='—').map(o=>String(o.table).replace(/^T/i,'').padStart(2,'0')));
+  safeTableList().forEach(t=>{const key=String(t.n).padStart(2,'0'); if(activeTables.has(key)){t.s='occupied';t.guest=t.guest||2;} else if(t.s==='occupied'){t.s='available';t.guest=0;}});
+  (tables||[]).forEach(t=>{const key=String(t.n).padStart(2,'0'); t.occ=activeTables.has(key);});
+}
+const _oldSavePaidSale = savePaidSale;
+savePaidSale=function(o,method){_oldSavePaidSale(o,method); if(o&&o.table)setTableAuto(o.table,'available'); queueSave();};
+const _oldCreateOrder = createOrder;
+createOrder=function(){
+  if(!cart.length)return;
+  const table=document.getElementById('mtable')?.value;
+  const o={no:'#'+seq++,inv:uid(),type:cType,table:cType==='dine'?(table||'—'):null,status:'Unpaid',stage:0,age:'just now',items:cart.map(i=>({...i,cat:i.cat||MENU.find(m=>m.id===i.id)?.cat,station:stationOf(i)}))};
+  orders.unshift(o); selNo=o.no; if(o.type==='dine')setTableAuto(o.table,'occupied'); closeModal(); cart=[]; toast('Order '+o.no+' created'); if(nav!=='pos')go('pos'); else render(); queueSave();
+};
+const _oldSendWaiterOrder = sendWaiterOrder;
+sendWaiterOrder=function(){
+  if(!cart.length)return;
+  const table=(document.getElementById('wtable')?.value||window.wTable||'').trim();
+  const o={no:'#'+seq++,inv:uid(),type:cType,table:cType==='dine'?(table||'—'):null,status:'Unpaid',stage:0,age:'just now',note:wNote,customer:wCustomer,phone:wPhone,address:wAddress,items:cart.map(i=>({...i,station:stationOf(i)}))};
+  orders.unshift(o); selNo=o.no; if(o.type==='dine')setTableAuto(o.table,'occupied'); cart=[]; wNote=''; toast('Order '+o.no+' created'); go('pos'); queueSave();
+};
+const _oldCreateQuickOrder = createQuickOrder;
+createQuickOrder=function(){const o={no:'#'+seq++,inv:uid(),type:'take',table:null,status:'Unpaid',stage:0,age:'just now',items:cart.map(i=>({...i,cat:i.cat||MENU.find(m=>m.id===i.id)?.cat,station:stationOf(i)}))};orders.unshift(o);selNo=o.no;cart=[];if(kotAutoPrint){setTimeout(()=>printKOT(o),100)}else{toast('Order '+o.no+' created')}go('pos');queueSave();};
+const _oldFinishPayment = finishPayment;
+finishPayment=function(no,afterComplete=false,doPrint=false){
+  const o=orders.find(x=>x.no===no); if(o&&o.table)setTableAuto(o.table,'available');
+  if(doPrint && o) printReceipt(no);
+  const ap=document.getElementById('afterPaymentModal'); if(ap)ap.remove();
+  if(afterComplete){orders=orders.filter(x=>x.no!==no);selNo=orders[0]?orders[0].no:null;toast(no+' completed');}
+  else{toast(no+' settled');}
+  syncTablesWithOrders(); render(); queueSave();
+};
+
+function smoothQty(no,id,d){const o=orders.find(x=>x.no===no);if(!o)return;const it=o.items.find(i=>i.id===id);if(!it)return;it.qty+=d;if(it.qty<=0)o.items=o.items.filter(i=>i.id!==id);refreshOrderPanels(false);}
+qty=function(no,id,d){smoothQty(no,id,d);};
+setStage=function(no,s){const o=orders.find(x=>x.no===no);if(o)o.stage=s;refreshOrderPanels(false);};
+nextStage=function(no){const o=orders.find(x=>x.no===no);if(!o)return;if(o.stage<3)o.stage++;toast('Stage: '+FLOW[o.stage]);refreshOrderPanels(false);};
+setTab=function(t){tab=t;refreshOrderPanels(true);};
+selectOrder=function(no){selNo=no;refreshOrderPanels(true);};
+function selectPastOrder(no){selNo=no;refreshOrderPanels(true);}
+function refreshOrderPanels(updateList=false){
+  const running=orders, stats=todayOrderStats(), past=pastSalesToday();
+  const sel=tab==='past'?past.find(o=>o.no===selNo):orders.find(o=>o.no===selNo);
+  const ps=document.getElementById('posStats'); if(ps)ps.innerHTML=posStatsHtml(running,stats);
+  if(updateList){const ol=document.getElementById('orderList'); if(ol)ol.innerHTML=listOrders();}
+  const od=document.getElementById('orderDetailsPanel'); if(od)od.innerHTML=orderDetailsPanelHtml(sel);
+  const bp=document.getElementById('billPanel'); if(bp)bp.innerHTML=billPanelHtml(sel);
+  queueSave();
+}
+updatePOSPartial=refreshOrderPanels;
+
+function quickBillHtml(){
+  const sub=cart.reduce((s,i)=>s+i.price*i.qty,0);
+  return `<div class="panel-head"><h3>Current Bill</h3><span class="pill">${cart.length} items</span></div><div class="m-lines" style="max-height:450px">${cart.length?cart.map(i=>`<div class="m-line"><div class="ml-n">${i.name}</div><button class="step" onclick="quickChange(${i.id},-1)">−</button><div class="ml-q">${i.qty}</div><button class="step" onclick="quickChange(${i.id},1)">+</button><div class="ml-p">${rm(i.price*i.qty)}</div></div>`).join(''):'<div class="empty">Click food item to add</div>'}</div><div class="m-tot"><div class="l"><span>Subtotal</span><span>${rm(sub)}</span></div><div class="l"><span>Service 5%</span><span>${rm(sub*SERVICE)}</span></div><div class="l"><span>SST 6%</span><span>${rm(sub*TAX)}</span></div><div class="t"><span>Total</span><span>${rm(sub+sub*SERVICE+sub*TAX)}</span></div></div><button class="m-create" onclick="createQuickOrder()" ${cart.length?'':'disabled'}>Create Order & Print</button>`;
+}
+function updateQuickBill(){const el=document.getElementById('quickBillPanel'); if(el)el.innerHTML=quickBillHtml(); queueSave();}
+addQuick=function(id){const m=MENU.find(x=>x.id===id),e=cart.find(i=>i.id===id);if(e)e.qty++;else cart.push({id:m.id,name:m.name,price:m.price,qty:1,cat:m.cat});updateQuickBill();};
+function quickChange(id,d){const i=cart.find(x=>x.id===id);if(!i)return;i.qty+=d;if(i.qty<=0)cart=cart.filter(x=>x.id!==id);updateQuickBill();}
+quickPosView=function(){return head('Quick POS Billing','Restaurant style POS: categories, HD dish cards, cart, discount, tax and receipt','<button class="btn blue" onclick="openModal()">+ Start New Bill</button>')+`<div class="panel" style="padding:18px;margin-bottom:16px"><div style="display:grid;grid-template-columns:1fr 360px;gap:16px"><div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">${cats().map(c=>`<button class="chip ${mCat===c?'active':''}" onclick="mCat='${c}';render()">${c}</button>`).join('')}</div><div class="menu-grid">${MENU.filter(m=>mCat==='All'||m.cat===mCat).map(m=>`<div class="dish" onclick="addQuick(${m.id})" style="cursor:pointer"><div class="img">${m.img?`<img src="${m.img}">`:'🍽'}</div><div class="b"><h4>${m.name}</h4><p>${m.cat}</p><b>${rm(m.price)}</b></div></div>`).join('')}</div></div><div class="panel" id="quickBillPanel" style="box-shadow:none">${quickBillHtml()}</div></div></div>`;};
+
+function waiterCartHtml(){
+  const sub=cart.reduce((s,i)=>s+i.price*i.qty,0);
+  return `<div class="panel-head"><h3>Current Order</h3><span class="pill">${cart.length} items</span></div><div class="m-lines" style="max-height:370px">${cart.length?cart.map(i=>`<div class="m-line"><div class="ml-n">${i.name}<small style="display:block;color:var(--muted);font-size:11px">${stationIcon(stationOf(i))} ${stationOf(i)}</small></div><button class="step" onclick="waiterChange(${i.id},-1)">−</button><div class="ml-q">${i.qty}</div><button class="step" onclick="waiterChange(${i.id},1)">+</button><div class="ml-p">${rm(i.price*i.qty)}</div></div>`).join(''):'<div class="empty">Tap menu item to add</div>'}</div><div style="padding:14px;border-top:1px solid var(--line)"><textarea class="input" style="height:80px;resize:none" placeholder="Kitchen note: no onion, extra spicy..." oninput="wNote=this.value">${wNote}</textarea></div><div class="m-tot" style="padding:0 14px 10px"><div class="l"><span>Subtotal</span><span>${rm(sub)}</span></div><div class="t"><span>Kitchen Total</span><span>${rm(sub)}</span></div></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:14px"><button class="btn light" onclick="clearWaiterCart()">Clear</button><button class="btn green" onclick="sendWaiterOrder()" ${cart.length?'':'disabled'}>Send To Kitchen</button></div>`;
+}
+function updateWaiterBill(){const el=document.getElementById('waiterBillPanel'); if(el)el.innerHTML=waiterCartHtml(); queueSave();}
+addWaiterItem=function(id){const m=MENU.find(x=>x.id===id),e=cart.find(i=>i.id===id);if(e)e.qty++;else cart.push({id:m.id,name:m.name,price:m.price,qty:1,cat:m.cat});updateWaiterBill();};
+function waiterChange(id,d){const i=cart.find(x=>x.id===id);if(!i)return;i.qty+=d;if(i.qty<=0)cart=cart.filter(x=>x.id!==id);updateWaiterBill();}
+clearWaiterCart=function(){cart=[];wNote='';updateWaiterBill();};
+const _oldWaiterView = waiterView;
+waiterView=function(){
+  const tableOpts=safeTableList().map(t=>`<option value="${String(t.n).padStart(2,'0')}">T${String(t.n).padStart(2,'0')} — ${tLabel(t.s)}</option>`).join('');
+  return head('Waiter Order Screen','Fast order taking for table and takeaway')+`<div class="grid3" style="grid-template-columns:1.2fr .8fr"><section class="panel" style="padding:16px"><div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px"><div><label style="font-weight:900;font-size:12px;color:var(--muted)">Order Type</label><select class="input" onchange="cType=this.value">${TYPES.map(t=>`<option value="${t.k}" ${cType===t.k?'selected':''}>${t.l}</option>`).join('')}</select></div><div><label style="font-weight:900;font-size:12px;color:var(--muted)">Table</label><select class="input" id="wtable">${tableOpts}</select></div></div><div style="display:flex;gap:8px;flex-wrap:wrap;margin:14px 0">${cats().map(c=>`<button class="chip ${mCat===c?'active':''}" onclick="mCat='${c}';render()">${c}</button>`).join('')}</div><div class="menu-grid">${MENU.filter(m=>mCat==='All'||m.cat===mCat).map(m=>`<div class="dish" onclick="addWaiterItem(${m.id})" style="cursor:pointer"><div class="img">${m.img?`<img src="${m.img}">`:'🍽'}</div><div class="b"><h4>${m.name}</h4><p>${m.cat}</p><b>${rm(m.price)}</b></div></div>`).join('')}</div></section><section class="panel" id="waiterBillPanel" style="padding:0;overflow:hidden">${waiterCartHtml()}</section></div>`;
+};
+
+function setTableStatusSmooth(n,s){const t=safeTableList().find(x=>Number(x.n)===Number(n)); if(t){t.s=s;t.guest=s==='available'?0:(t.guest||2);} const old=tables.find(x=>Number(x.n)===Number(n)); if(old)old.occ=s==='occupied'; const wrap=document.getElementById('tablesWrap'); if(wrap)wrap.innerHTML=tableCardsHtml(); const stats=document.getElementById('tableStats'); if(stats)stats.innerHTML=tableStatsHtml(); queueSave();}
+function tableStatsHtml(){const list=safeTableList(); const cnt=s=>list.filter(t=>t.s===s).length;return `<div class="stat"><small>Available</small><h2 style="color:var(--green)">${cnt('available')}</h2></div><div class="stat"><small>Occupied</small><h2 style="color:var(--red)">${cnt('occupied')}</h2></div><div class="stat"><small>Reserved</small><h2 style="color:var(--orange)">${cnt('reserved')}</h2></div><div class="stat"><small>Cleaning</small><h2>${cnt('cleaning')}</h2></div>`;}
+function tableCardsHtml(){const list=safeTableList();return `<div class="grid3" style="grid-template-columns:repeat(auto-fill,minmax(150px,1fr))">${list.map(t=>`<div class="tbig ${tClass(t.s)}" style="position:relative"><div onclick="openTableOrder(${t.n})">T${String(t.n).padStart(2,'0')}<small>${tLabel(t.s)} ${t.guest?`· ${t.guest} pax`:''}</small></div><div style="display:flex;gap:5px;justify-content:center;margin-top:12px;flex-wrap:wrap"><button class="chip" onclick="setTableStatusSmooth(${t.n},'available')">Free</button><button class="chip" onclick="setTableStatusSmooth(${t.n},'occupied')">Busy</button><button class="chip" onclick="setTableStatusSmooth(${t.n},'reserved')">Reserve</button></div></div>`).join('')}</div>`;}
+tablesView=function(){syncTablesWithOrders();return head('Visual Table Layout','Click table to open order. Table becomes busy until bill is completed.')+`<div class="stats" id="tableStats">${tableStatsHtml()}</div><div class="panel" id="tablesWrap" style="padding:18px">${tableCardsHtml()}</div><div class="panel" style="padding:16px;margin-top:16px"><b>Table Actions</b><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button class="btn blue" onclick="transferTable()">Transfer Table</button><button class="btn light" onclick="mergeTable()">Merge Tables</button></div></div>`;};
+
+function polishedLineGraph(rows,metric='sales'){
+  const title=metric==='sales'?'Day total':'Orders per day';
+  const vals=rows.length?rows.map(r=>Number(r[metric]||0)):[0];
+  let max=Math.max(...vals,1); max=max===1?1:max*1.18;
+  const w=1100,h=260,left=110,right=35,top=28,bottom=52,innerW=w-left-right,innerH=h-top-bottom;
+  const xFor=i=>left+(rows.length<=1?innerW/2:i*innerW/(rows.length-1));
+  const yFor=v=>top+innerH-(v/max)*innerH;
+  const pts=vals.map((v,i)=>`${xFor(i)},${yFor(v)}`);
+  const area=`${xFor(0)},${top+innerH} ${pts.join(' ')} ${xFor(vals.length-1)},${top+innerH}`;
+  const labels=[1,.75,.5,.25,0].map(fr=>{const y=top+innerH-fr*innerH; const val=max*fr; return `<line x1="${left}" y1="${y}" x2="${w-right}" y2="${y}" stroke="rgba(0,0,0,.10)"/><text x="${left-18}" y="${y+4}" font-size="13" text-anchor="end" fill="#8f846f">${metric==='sales'?rm(val):Math.round(val)}</text>`;}).join('');
+  const line=pts.length>1?`<polyline points="${pts.join(' ')}" fill="none" stroke="#d4af37" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>`:`<line x1="${xFor(0)-80}" y1="${yFor(vals[0])}" x2="${xFor(0)+80}" y2="${yFor(vals[0])}" stroke="#d4af37" stroke-width="4" stroke-linecap="round"/>`;
+  return `<section class="panel chart-panel" style="padding:18px"><h3 style="margin-bottom:10px">${title}</h3><svg viewBox="0 0 ${w} ${h}" style="width:100%;height:300px;display:block;overflow:visible">${labels}<polygon points="${area}" fill="rgba(212,175,55,.18)"/>${line}${pts.map((pt,i)=>{const [x,y]=pt.split(',');return `<circle cx="${x}" cy="${y}" r="6" fill="#d4af37" stroke="#fff" stroke-width="2"/><text x="${x}" y="${h-18}" text-anchor="middle" font-size="13" fill="#8f846f">${rows[i]?shortDate(rows[i].key):''}</text>`}).join('')}</svg></section>`;
+}
+simpleLineGraph=polishedLineGraph;
+reportView=function(){const rows=groupSalesByDay(filteredSales(1));const total=rows.reduce((s,r)=>s+r.sales,0);const ordersCount=rows.reduce((s,r)=>s+r.orders,0);const avg=ordersCount?total/ordersCount:0;const best=rows.slice().sort((a,b)=>b.sales-a.sales)[0];return head('Sales Report','Smart POS · 1 day(s)','<button class="btn dark" onclick="window.print()">Download Report</button>')+`<section class="panel" style="padding:14px 18px;display:flex;gap:10px;flex-wrap:wrap"><button class="chip gold">Today</button><button class="chip">Yesterday</button><button class="chip">Last 7 Days</button><button class="chip">This Month</button><button class="chip">Last Month</button><button class="chip">Custom</button></section>`+`<div class="stats"><div class="stat"><small>Total Sales</small><h2>${rm(total)}</h2></div><div class="stat"><small>Total Orders</small><h2>${ordersCount}</h2></div><div class="stat"><small>Avg Order</small><h2>${rm(avg)}</h2></div><div class="stat"><small>Best Day</small><h2>${best?`${shortDate(best.key)} · ${rm(best.sales)}`:'—'}</h2></div></div>`+polishedLineGraph(rows,'sales')+panelTable(['Date','Day','Orders','Avg/Order','Sales'],rows.map(r=>[shortDate(r.key),dayName(r.key),r.orders,rm(r.orders?r.sales/r.orders:0),`<b>${rm(r.sales)}</b>`]));};
+analyticsView=function(){const rows=groupSalesByDay(filteredSales(7));const total=rows.reduce((s,r)=>s+r.sales,0);const count=rows.reduce((s,r)=>s+r.orders,0);const avg=count?total/count:0;const paid=filteredSales(7);const typeSum=t=>paid.filter(r=>(r.type||'take')===t).reduce((s,r)=>s+Number(r.sales||0),0);const dine=typeSum('dine'),take=typeSum('take'),del=typeSum('delivery');return head('Restaurant Analytics','Smart POS · Last 7 days')+`<div class="stats"><div class="stat"><small>Total Revenue</small><h2>${rm(total)}</h2></div><div class="stat"><small>Order Count</small><h2>${count}</h2></div><div class="stat"><small>Avg Order</small><h2>${rm(avg)}</h2></div><div class="stat"><small>Peak Time</small><h2>8 PM</h2></div></div>`+polishedLineGraph(rows,'orders')+panelTable(['Order Type','Share','Revenue'],[['Dine-In',total?Math.round((dine/total)*100)+'%':'0%',rm(dine)],['Takeaway',total?Math.round((take/total)*100)+'%':'0%',rm(take)],['Delivery',total?Math.round((del/total)*100)+'%':'0%',rm(del)]]);};
+
+
+const _baseAppState=appState;
+appState=function(){const st=_baseAppState();st.tableStatuses=tableStatuses;st.paymentMethods=paymentMethods;st.cashierShift=cashierShift;return st;};
+const _baseApplyState=applyState;
+applyState=function(s){_baseApplyState(s);if(Array.isArray(s?.tableStatuses))tableStatuses=s.tableStatuses;if(Array.isArray(s?.paymentMethods))paymentMethods=s.paymentMethods;if(s?.cashierShift)cashierShift={...cashierShift,...s.cashierShift};syncTablesWithOrders();};
+
+/* ---------- END FINAL PATCH ---------- */
+
 // read role from login (?role=waiter/cashier/owner)
 (function(){const p=new URLSearchParams(location.search).get("role");if(p==="waiter"){role="waiter";}})();
 initSupabase();

@@ -25,17 +25,44 @@ const TYPES=[{k:"dine",l:"Dine-In",s:"DI"},{k:"take",l:"Takeaway",s:"TA"},{k:"de
 const FLOW=["Received","Preparing","Ready","Completed"];
 const SERVICE=0.05, TAX=0.06;
 const rm=n=>"RM "+Number(n).toFixed(2);
+const localDateKey=(d=new Date())=>{
+  const dt=(d instanceof Date)?d:new Date(d);
+  if(isNaN(dt)) return new Date().toISOString().slice(0,10);
+  const y=dt.getFullYear();
+  const m=String(dt.getMonth()+1).padStart(2,"0");
+  const day=String(dt.getDate()).padStart(2,"0");
+  return `${y}-${m}-${day}`;
+};
+const normalizeSaleKey=(k)=>{
+  if(!k) return localDateKey(new Date());
+  if(/^\d{4}-\d{2}-\d{2}$/.test(String(k))) return String(k);
+  const d=new Date(k);
+  if(!isNaN(d)) return localDateKey(d);
+  const parts=String(k).split(/[\/-]/).map(Number);
+  if(parts.length>=2){
+    const year=parts[2]||new Date().getFullYear();
+    const day=String(parts[0]).padStart(2,"0");
+    const mon=String(parts[1]).padStart(2,"0");
+    return `${year}-${mon}-${day}`;
+  }
+  return String(k);
+};
+const shortDate=(key)=>{const p=String(key).split('-');return p.length===3?`${Number(p[2])}/${Number(p[1])}`:String(key)};
+const dayName=(key)=>{const d=new Date(key+'T00:00:00');return isNaN(d)?'—':d.toLocaleDateString('en-US',{weekday:'short'});};
 const uid=()=>"#"+Math.random().toString(36).slice(2,8).toUpperCase();
 const cats=()=>["All",...new Set(MENU.map(m=>m.cat))];
+let menuCat="All";
+let imgTarget=null;
+let dishEditId=null, dishTempImg=null;
 
 const NAV=[
-  {g:"Orders & Dining",items:[{k:"pos",l:"Orders Dashboard",badge:3},{k:"waiter",l:"Waiter Order Screen"},{k:"quickpos",l:"Quick POS Billing"},{k:"tables",l:"Tables"},{k:"bookings",l:"Table Bookings"}]},
+  {g:"Orders & Dining",items:[{k:"pos",l:"Orders Dashboard",badge:3},{k:"waiter",l:"Waiter Order Screen"},{k:"quickpos",l:"Quick POS Billing"},{k:"tables",l:"Tables"}]},
   {g:"Reports & Analytics",items:[{k:"reports",l:"Reports"},{k:"closing",l:"Daily Closing"},{k:"analytics",l:"Restaurant Analytics"}]},
   {g:"Menu & Marketing",items:[{k:"menu",l:"Menu & Dishes"},{k:"recipes",l:"Recipe Auto Stock"},{k:"qr",l:"QR Table Ordering"},{k:"promotions",l:"Promotions"}]},
   {g:"Management",items:[{k:"staff",l:"Staff Center"},{k:"roles",l:"Roles & Permissions"},{k:"cashier",l:"Cashier Features"},{k:"customers",l:"Daily Summary"},{k:"inventory",l:"Inventory"},{k:"expenses",l:"Expenses"},{k:"kotprinter",l:"Auto KOT Printer"},{k:"branches",l:"Multi Branch"},{k:"loyalty",l:"Loyalty Points"},{k:"settings",l:"Settings"}]},
 ];
 const ROLE_NAV={
-  waiter:["waiter","tables","bookings"],
+  waiter:["waiter","tables"],
   kitchen:["pos"],
   tandoor:["pos"],
   cashier:null
@@ -54,12 +81,12 @@ let expenses=[];
 let promos=[];
 let customers=[];
 let branches=[];
-const PERMISSION_OPTIONS=["Full access","Orders Dashboard","Create Orders","Edit Orders","Settle Bills","Split Payment","Discount","Refund / Void","Print Receipts","Past Orders","Tables","Table Bookings","Quick POS Billing","Reports","Restaurant Analytics","Daily Closing","Expenses","Menu & Dishes","Recipe Auto Stock","QR Table Ordering","Promotions","Staff Center","Roles & Permissions","Cashier Features","Daily Summary","Inventory","Auto KOT Printer","Multi Branch","Loyalty Points","Settings"];
+const PERMISSION_OPTIONS=["Full access","Orders Dashboard","Create Orders","Edit Orders","Settle Bills","Split Payment","Discount","Refund / Void","Print Receipts","Past Orders","Tables","Quick POS Billing","Reports","Restaurant Analytics","Daily Closing","Expenses","Menu & Dishes","Recipe Auto Stock","QR Table Ordering","Promotions","Staff Center","Roles & Permissions","Cashier Features","Daily Summary","Inventory","Auto KOT Printer","Multi Branch","Loyalty Points","Settings"];
 let rolePerms=[
   {role:"Admin",perms:[...PERMISSION_OPTIONS]},
   {role:"Manager",perms:PERMISSION_OPTIONS.filter(p=>!["Settings"].includes(p))},
   {role:"Cashier",perms:["Orders Dashboard","Settle Bills","Split Payment","Discount","Refund / Void","Print Receipts","Past Orders","Reports","Daily Closing","Expenses","Menu & Dishes","Cashier Features","Daily Summary"]},
-  {role:"Waiter",perms:["Create Orders","Tables","Table Bookings"]}
+  {role:"Waiter",perms:["Create Orders","Tables"]}
 ];
 let openRoleIndex=null;
 let barcodeText="";
@@ -105,7 +132,7 @@ function go(k){nav=k;renderNav();render();}
 /* ---------- ROUTER ---------- */
 function render(){
   const m=document.getElementById("main");
-  const v={pos:posView,waiter:waiterView,quickpos:quickPosView,kds:kdsView,tables:tablesView,bookings:bookingsView,service:serviceView,reports:reportView,closing:closingView,analytics:analyticsView,menu:menuView,modifiers:modifiersView,recipes:recipesView,qr:qrView,promotions:promoView,staff:staffView,roles:rolesView,cashier:cashierFeaturesView,inventory:invView,expenses:expensesView,kotprinter:kotPrinterView,branches:branchesView,customers:customerFeaturesView,loyalty:loyaltyView,settings:settingsView}[nav];
+  const v={pos:posView,waiter:waiterView,quickpos:quickPosView,kds:kdsView,tables:tablesView,reports:reportView,closing:closingView,analytics:analyticsView,menu:menuView,modifiers:modifiersView,recipes:recipesView,qr:qrView,promotions:promoView,staff:staffView,roles:rolesView,cashier:cashierFeaturesView,inventory:invView,expenses:expensesView,kotprinter:kotPrinterView,branches:branchesView,customers:customerFeaturesView,loyalty:loyaltyView,settings:settingsView}[nav];
   m.innerHTML=v?v():"";
   queueSave();
 }
@@ -136,28 +163,34 @@ function posView(){
       <button class="btn blue" onclick="openModal()">+ Create New Order</button>
     </div>
   </div>
-  <div class="stats">
-    <div class="stat"><small>Total Orders</small><h2>${stats.totalOrders}</h2><div class="trend up">${running.length} running</div></div>
-    <div class="stat"><small>Total Dine-In Orders</small><h2>${stats.dineOrders}</h2></div>
-    <div class="stat"><small>Total Takeaway Orders</small><h2>${stats.takeOrders}</h2></div>
-    <div class="stat ${role==='waiter'?'hide-cashier':''}"><small>Total Sales</small><h2>${rm(stats.todaySales)}</h2><div class="trend up">Paid orders only</div></div>
-  </div>
+  <div class="stats" id="posStats">${posStatsHtml(running,stats)}</div>
   <div class="pos-grid">
     <section class="panel">
       <div class="panel-head"><h3>Orders</h3><span class="pill">${running.length} Running</span></div>
       <div class="tabs"><div class="tab ${tab==='running'?'active':''}" onclick="setTab('running')">RUNNING</div><div class="tab ${tab==='past'?'active':''}" onclick="setTab('past')">PAST</div></div>
       <div class="filters"><select class="input"><option>Invoice No.</option><option>Table No.</option></select><input class="input" placeholder="Search by invoice no."></div>
-      <div class="order-list">${listOrders()}</div>
+      <div class="order-list" id="orderList">${listOrders()}</div>
     </section>
-    <section class="panel">
-      <div class="panel-head"><h3>Order Details</h3><span class="invoice">${sel?sel.inv:''}</span></div>
-      ${sel?(tab==='past'?pastDetailBody(sel):detailBody(sel)):'<div class="empty">Select an order</div>'}
-    </section>
-    <section class="panel bill-panel">
-      <div class="panel-head"><h3>${role==='waiter'?'Order Actions':'Bill Summary'}</h3>${sel?`<span class="pill ${sel.status==='Paid'?'green-pill':'red-pill'}">${sel.status}</span>`:''}</div>
-      ${sel?(tab==='past'?pastBillBody(sel):billBody(sel)):'<div class="empty">No order selected</div>'}
-    </section>
+    <section class="panel" id="orderDetailsPanel">${orderDetailsPanelHtml(sel)}</section>
+    <section class="panel bill-panel" id="billPanel">${billPanelHtml(sel)}</section>
   </div>`;
+}
+function posStatsHtml(running,stats){return `
+    <div class="stat"><small>Total Orders</small><h2>${stats.totalOrders}</h2><div class="trend up">${running.length} running</div></div>
+    <div class="stat"><small>Total Dine-In Orders</small><h2>${stats.dineOrders}</h2></div>
+    <div class="stat"><small>Total Takeaway Orders</small><h2>${stats.takeOrders}</h2></div>
+    <div class="stat ${role==='waiter'?'hide-cashier':''}"><small>Total Sales</small><h2>${rm(stats.todaySales)}</h2><div class="trend up">Paid orders only</div></div>`;}
+function orderDetailsPanelHtml(sel){return `<div class="panel-head"><h3>Order Details</h3><span class="invoice">${sel?sel.inv:''}</span></div>${sel?(tab==='past'?pastDetailBody(sel):detailBody(sel)):'<div class="empty">Select an order</div>'}`;}
+function billPanelHtml(sel){return `<div class="panel-head"><h3>${role==='waiter'?'Order Actions':'Bill Summary'}</h3>${sel?`<span class="pill ${sel.status==='Paid'?'green-pill':'red-pill'}">${sel.status}</span>`:''}</div>${sel?(tab==='past'?pastBillBody(sel):billBody(sel)):'<div class="empty">No order selected</div>'}`;}
+function updatePOSPartial(updateList=false){
+  if(nav!=='pos' && nav!=='waiter')return render();
+  const running=orders, stats=todayOrderStats(), past=pastSalesToday();
+  const sel=tab==='past'?past.find(o=>o.no===selNo):orders.find(o=>o.no===selNo);
+  const ps=document.getElementById('posStats'); if(ps)ps.innerHTML=posStatsHtml(running,stats);
+  if(updateList){const ol=document.getElementById('orderList'); if(ol)ol.innerHTML=listOrders();}
+  const od=document.getElementById('orderDetailsPanel'); if(od)od.innerHTML=orderDetailsPanelHtml(sel);
+  const bp=document.getElementById('billPanel'); if(bp)bp.innerHTML=billPanelHtml(sel);
+  queueSave();
 }
 function pastSalesToday(){
   const key=todayKey();
@@ -181,7 +214,7 @@ function listOrders(){
       <div class="order-meta"><span>⏱ ${o.age}</span><span>🛍 ${o.items.reduce((s,i)=>s+i.qty,0)} items</span><span>${o.table?'Table '+o.table:typeMeta(o.type).l}</span></div>
     </div>`;}).join("");
 }
-function selectPastOrder(no){selNo=no;render();}
+function selectPastOrder(no){selNo=no;updatePOSPartial(true);}
 function pastDetailBody(r){
   const itemRows=Array.isArray(r.itemsList)?r.itemsList.map(i=>`<tr><td><div class="food-line"><span class="food-img">${findImg(i.id)?`<img src="${findImg(i.id)}">`:'🍽'}</span>${i.name}</div></td><td>${i.qty}</td><td>${rm(i.price||0)}</td><td>${rm((i.price||0)*(i.qty||1))}</td></tr>`).join(''):`<tr><td>Paid order summary</td><td>${r.itemsCount||r.items||0}</td><td>-</td><td>${rm(r.sales||0)}</td></tr>`;
   return `<div class="detail-body">
@@ -238,10 +271,10 @@ function billBody(o){const t=totals(o);
   </div>`;
 }
 function setTab(t){tab=t;render();}
-function selectOrder(no){selNo=no;render();}
-function qty(no,id,d){const o=orders.find(x=>x.no===no);const it=o.items.find(i=>i.id===id);it.qty+=d;if(it.qty<=0)o.items=o.items.filter(i=>i.id!==id);render();}
-function setStage(no,s){orders.find(x=>x.no===no).stage=s;render();}
-function nextStage(no){const o=orders.find(x=>x.no===no);if(o.stage<3)o.stage++;toast("Stage: "+FLOW[o.stage]);render();}
+function selectOrder(no){selNo=no;updatePOSPartial(true);}
+function qty(no,id,d){const o=orders.find(x=>x.no===no);if(!o)return;const it=o.items.find(i=>i.id===id);if(!it)return;it.qty+=d;if(it.qty<=0)o.items=o.items.filter(i=>i.id!==id);updatePOSPartial(true);}
+function setStage(no,s){const o=orders.find(x=>x.no===no);if(o)o.stage=s;updatePOSPartial(true);}
+function nextStage(no){const o=orders.find(x=>x.no===no);if(!o)return;if(o.stage<3)o.stage++;toast("Stage: "+FLOW[o.stage]);updatePOSPartial(true);}
 function activePaymentMethods(){return paymentMethods.filter(p=>p.active).map(p=>p.name);}
 function savePaidSale(o,method){
   if(!o)return;
@@ -331,7 +364,7 @@ function tablesView(){const occ=tables.filter(t=>t.occ).length;
 
 /* ---------- BOOKINGS ---------- */
 function bookingsView(){
-  return head("Table Bookings","Reservations for today",'<button class="btn blue" onclick="addBooking()">+ Booking</button>')+panelTable(["Customer","Table","Time","Guests","Status",""],bookings.map((b,i)=>[`<b>${b.c}</b>`,b.t,b.time,b.g+" pax",`<span class="pill ${b.s==='Pending'?'red-pill':'green-pill'}" onclick="bookings[${i}].s=bookings[${i}].s==='Confirmed'?'Pending':'Confirmed';render()" style="cursor:pointer">${b.s}</span>`,`<span onclick="bookings.splice(${i},1);render()" style="cursor:pointer;color:var(--red);font-weight:900">✕</span>`]));
+  return head("Reservations for today",'<button class="btn blue" onclick="addBooking()">+ Booking</button>')+panelTable(["Customer","Table","Time","Guests","Status",""],bookings.map((b,i)=>[`<b>${b.c}</b>`,b.t,b.time,b.g+" pax",`<span class="pill ${b.s==='Pending'?'red-pill':'green-pill'}" onclick="bookings[${i}].s=bookings[${i}].s==='Confirmed'?'Pending':'Confirmed';render()" style="cursor:pointer">${b.s}</span>`,`<span onclick="bookings.splice(${i},1);render()" style="cursor:pointer;color:var(--red);font-weight:900">✕</span>`]));
 }
 /* ---------- SERVICE ---------- */
 function serviceView(){
@@ -339,10 +372,23 @@ function serviceView(){
 }
 /* ---------- STAFF ---------- */
 function staffView(){
-  return head("Staff Center","Attendance, roles and permissions",'<button class="btn light" onclick="addStaff()">+ Add Staff</button><button class="btn dark" onclick="downloadCSV(\'staff\',[\'User\',\'Designation\',\'Location\',\'Status\',\'ClockIn\'],staff.map(s=>[s.u,s.d,s.l,s.s,s.ci]))">Download Data</button>')+panelTable(["User","Designation","Location","Status","Clock-In"],staff.map((s,i)=>[`<b>${s.u}</b>`,s.d,s.l,`<span class="pill ${s.s==='Absent'?'red-pill':'green-pill'}" onclick="toggleStaff(${i})" style="cursor:pointer">${s.s}</span>`,s.ci]));
+  const present=staff.filter(s=>s.s==='Present'||s.s==='On Duty').length;
+  const onDuty=staff.filter(s=>s.s==='On Duty'||(s.ci&&s.ci!=='-'&&!s.co)).length;
+  const checkedOut=staff.filter(s=>s.s==='Checked Out').length;
+  const totalHours=staff.reduce((a,s)=>a+Number(s.hours||0),0);
+  const rows=staff.map((s,i)=>{
+    const action=s.s==='On Duty'||(s.ci&&s.ci!=='-'&&!s.co)
+      ? `<button class="btn green" onclick="staffCheckOut(${i})">Check Out</button>`
+      : `<button class="btn blue" onclick="staffCheckIn(${i})">Check In</button>`;
+    return [`<b>${s.u}</b>`,s.d||'-',s.l||'Main Branch',s.ci||'-',s.co||'-',`${Number(s.hours||0).toFixed(2)} hrs`,pill(s.s||'Absent',s.s==='Absent'?'red':'green'),action+` <button class="chip" onclick="editStaff(${i})">Edit</button>`];
+  });
+  return head("Staff Center","Attendance, check-in/check-out and working hours",'<button class="btn light" onclick="addStaff()">+ Add Staff</button><button class="btn dark" onclick="downloadCSV(\'staff-attendance\',[\'User\',\'Designation\',\'Location\',\'CheckIn\',\'CheckOut\',\'Hours\',\'Status\'],staff.map(s=>[s.u,s.d,s.l,s.ci||\'-\',s.co||\'-\',s.hours||0,s.s]))">Download Attendance</button>')+
+  `<div class="stats"><div class="stat"><small>Total Staff</small><h2>${staff.length}</h2></div><div class="stat"><small>Present</small><h2>${present}</h2></div><div class="stat"><small>On Duty</small><h2>${onDuty}</h2></div><div class="stat"><small>Total Hours</small><h2>${totalHours.toFixed(2)}</h2></div></div>`+
+  panelTable(["Staff","Role","Branch","Check In","Check Out","Hours","Status","Action"],rows);
 }
-/* ---------- INVENTORY ---------- */
-function invAlert(i){return Number(i.alert ?? i.low ?? 8)}
+function staffCheckIn(i){const s=staff[i];s.ci=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});s.checkInTs=Date.now();s.co='';s.s='On Duty';toast(s.u+' checked in');render();}
+function staffCheckOut(i){const s=staff[i];s.co=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});const ms=s.checkInTs?Date.now()-Number(s.checkInTs):0;s.hours=Number(s.hours||0)+(ms?ms/3600000:0);s.checkInTs=null;s.s='Checked Out';toast(s.u+' checked out');render();}
+function editStaff(i){const s=staff[i];openFormModal('Edit Staff Member',[{name:'u',label:'Staff Name',value:s.u,required:true},{name:'d',label:'Designation',type:'select',value:s.d||'Waiter',options:['Cashier','Waiter','Kitchen','Tandoor','Manager','Admin']},{name:'l',label:'Location / Outlet',value:s.l||'Main Branch'},{name:'s',label:'Status',type:'select',value:s.s||'Absent',options:['Absent','Present','On Duty','Checked Out']}],d=>{s.u=d.u.trim();s.d=d.d;s.l=d.l;s.s=d.s;toast('Staff updated');});}
 function invStatus(q,alert=8){q=Number(q)||0;alert=Number(alert)||0;return q<=0?'out':q<=alert?'low':'good'}
 function invView(){
   inventory.forEach(i=>{i.alert=invAlert(i);i.s=invStatus(i.q,i.alert)});
@@ -355,7 +401,7 @@ function invView(){
 }
 function adjStock(idx,d){const it=inventory[idx];it.q=Math.max(0,Number(it.q||0)+d);it.alert=invAlert(it);it.s=invStatus(it.q,it.alert);render();}
 function addIngredient(){openFormModal('Add Ingredient',[{name:'name',label:'Ingredient name'},{name:'q',label:'Quantity',type:'number',value:10},{name:'u',label:'Unit',type:'select',value:'kg',options:['kg','liter','piece']},{name:'alert',label:'Low stock warning at',type:'number',value:5,placeholder:'Example: 5'}],d=>{if(!d.name)return;const q=parseFloat(d.q)||0;const u=d.u||'kg';const alert=parseFloat(d.alert)||0;inventory.push({i:d.name,q,u,alert,s:invStatus(q,alert)});toast(d.name+' added');});}
-function editIngredient(idx){const it=inventory[idx];openFormModal('Edit Ingredient',[{name:'name',label:'Ingredient name',value:it.i},{name:'q',label:'Quantity',type:'number',value:it.q},{name:'u',label:'Unit',type:'select',value:it.u||'kg',options:['kg','liter','piece']},{name:'alert',label:'Low stock warning at',type:'number',value:invAlert(it)}],d=>{if(!d.name)return;it.i=d.name;it.q=parseFloat(d.q)||0;it.u=d.u||'kg';it.alert=parseFloat(d.alert)||0;it.s=invStatus(it.q,it.alert);toast('Ingredient updated');});}
+function editIngredient(idx){const it=inventory[idx];openFormModal('Edit Ingredient',[{name:'name',label:'Ingredient name',value:it.i,required:true},{name:'q',label:'Quantity',type:'number',value:it.q},{name:'u',label:'Unit',type:'select',value:it.u||'kg',options:['kg','liter','piece']},{name:'alert',label:'Low stock warning at',type:'number',value:invAlert(it)}],d=>{const newQty=Number(d.q);it.i=(d.name||it.i).trim();it.q=Number.isFinite(newQty)?newQty:0;it.u=d.u||'kg';it.alert=Number(d.alert)||0;it.s=invStatus(it.q,it.alert);toast('Ingredient updated');});}
 
 /* ---------- EXPENSES ---------- */
 const EXPENSE_CATS=['Staff Meal','Gas','Supplies','Repair','Utilities','Rent','Delivery','Other'];
@@ -407,149 +453,54 @@ function viewExpenseReceipt(id){const e=expenses.find(x=>x.id===id);if(!e||!e.re
 
 /* ---------- PROMOTIONS ---------- */
 function promoView(){
-  return head("Promotions","Coupon and voucher management",'<button class="btn dark" onclick="addCoupon()">+ Add Coupon</button>')+panelTable(["Code","Title","Type","Status",""],promos.map((p,i)=>[`<b>${p.c}</b>`,p.t,p.ty,`<span class="pill ${p.s==='Active'?'green-pill':'red-pill'}" onclick="promos[${i}].s=promos[${i}].s==='Active'?'Off':'Active';render()" style="cursor:pointer">${p.s}</span>`,`<span onclick="promos.splice(${i},1);render()" style="cursor:pointer;color:var(--red);font-weight:900">✕</span>`]));
+  const rows=promos.map((p,i)=>{
+    const condition=[p.applyOn||p.ty||'Entire Bill', Number(p.minBill)>0?'Min '+rm(p.minBill):'', p.customerType&&p.customerType!=='All Customers'?p.customerType:''].filter(Boolean).join(' · ');
+    const val=p.discountType==='Percentage (%)'?`${p.value||0}%`:p.discountType==='Fixed Amount (RM)'?rm(p.value||0):(p.discountType||p.ty||'-');
+    const validity=(p.start&&p.end)?`${p.start} → ${p.end}`:'—';
+    return [`<b>${p.c}</b>`,p.t||'Discount',p.discountType||p.ty||'-',val,condition,validity,`${p.used||0}/${p.limit||'∞'}`,`<span class="pill ${p.s==='Active'?'green-pill':'red-pill'}" onclick="promos[${i}].s=promos[${i}].s==='Active'?'Inactive':'Active';render()" style="cursor:pointer">${p.s||'Active'}</span>`,`<button class="chip" onclick="editCoupon(${i})">Edit</button> <button class="chip" style="color:var(--red)" onclick="deleteCoupon(${i})">Delete</button>`];
+  });
+  return head("Promotions","Advanced coupon and voucher management",'<button class="btn dark" onclick="addCoupon()">+ Add Coupon</button>')+
+  `<div class="stats" style="grid-template-columns:repeat(4,1fr)"><div class="stat"><small>Total Promotions</small><h2>${promos.length}</h2></div><div class="stat"><small>Active</small><h2>${promos.filter(p=>p.s==='Active').length}</h2></div><div class="stat"><small>Used</small><h2>${promos.reduce((a,p)=>a+Number(p.used||0),0)}</h2></div><div class="stat"><small>Types</small><h2>${new Set(promos.map(p=>p.discountType||p.ty)).size||0}</h2></div></div>`+
+  panelTable(["Code","Title","Type","Value","Condition","Validity","Used/Limit","Status","Action"],rows);
 }
-
-/* ---------- REPORTS ---------- */
-let rPreset="today",rFrom=localDateKey(addDays(new Date(),-14)),rTo=localDateKey(new Date());
-function localDateKey(date){const d=new Date(date);return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
-function shortDateLabel(date){const d=new Date(date);return d.getDate()+"/"+(d.getMonth()+1);}
-function addDays(d,n){const x=new Date(d);x.setHours(0,0,0,0);x.setDate(x.getDate()+n);return x;}
-function reportToday(){const t=new Date();t.setHours(0,0,0,0);return t;}
-function normalizeSaleKey(k){if(!k)return "";const parts=String(k).split("-");if(parts.length!==3)return String(k);return parts[0]+"-"+String(parts[1]).padStart(2,"0")+"-"+String(parts[2]).padStart(2,"0");}
-function salesFor(date){const key=localDateKey(date);const rows=salesLog.filter(r=>normalizeSaleKey(r.key)===key);return{orders:rows.length,sales:Math.round(rows.reduce((s,r)=>s+Number(r.sales||0),0)*100)/100};}
-function rangeFor(k){const t=reportToday();if(k==="today")return[t,t];if(k==="yesterday"){const y=addDays(t,-1);return[y,y];}if(k==="week")return[addDays(t,-6),t];if(k==="thismonth")return[new Date(t.getFullYear(),t.getMonth(),1),t];if(k==="lastmonth")return[new Date(t.getFullYear(),t.getMonth()-1,1),new Date(t.getFullYear(),t.getMonth(),0)];if(k==="custom")return[new Date(rFrom),new Date(rTo)];return[t,t];}
-function buildRange(s,e){const out=[];let d=new Date(s);d.setHours(0,0,0,0);const end=new Date(e);end.setHours(0,0,0,0);while(d<=end){const day=salesFor(d);out.push({dateKey:localDateKey(d),label:shortDateLabel(d),dow:d.toLocaleDateString('en',{weekday:'short'}),...day,avg:day.orders?day.sales/day.orders:0});d=addDays(d,1);}return out;}
-function lineChart(data,field,kind,title){
-  const w=980,h=270,pL=78,pR=26,pT=30,pB=46;
-  const vals=(data||[]).map(d=>Number(d[field]||0));
-  const max=Math.max(...vals,1);
-  const y=v=>pT+(max-Number(v||0))/max*(h-pT-pB);
-  const x=i=>data.length<=1?pL+(w-pL-pR)/2:pL+i*((w-pL-pR)/(data.length-1));
-  const fmt=v=>kind==='money'?rm(v):String(Math.round(v));
-  const points=data.map((d,i)=>`${x(i)},${y(d[field])}`).join(' ');
-  const area=points?`${pL},${h-pB} ${points} ${x(data.length-1)},${h-pB}`:'';
-  const grids=[0,.25,.5,.75,1];
-  const axis=grids.map(g=>{const val=max*(1-g);const yy=y(val);return `<line x1="${pL}" y1="${yy}" x2="${w-pR}" y2="${yy}" stroke="rgba(156,145,118,.28)" stroke-width="1"/><text x="10" y="${yy+4}" font-size="12" fill="#8c836c">${fmt(val)}</text>`}).join('');
-  const circles=data.map((d,i)=>`<circle cx="${x(i)}" cy="${y(d[field])}" r="5" fill="#d4af37" stroke="#fff" stroke-width="2"><title>${d.label}: ${fmt(Number(d[field]||0))}</title></circle>`).join('');
-  const labels=data.map((d,i)=>`<text x="${x(i)}" y="${h-14}" text-anchor="middle" font-size="11" fill="#8c836c">${d.label}</text>`).join('');
-  return `<div class="panel" style="padding:18px;margin-bottom:16px"><b>${title}</b><div style="height:300px;margin-top:12px;overflow:hidden"><svg viewBox="0 0 ${w} ${h}" width="100%" height="100%" preserveAspectRatio="none"><defs><linearGradient id="lineFill${field}${kind}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#d4af37" stop-opacity=".28"/><stop offset="100%" stop-color="#d4af37" stop-opacity=".03"/></linearGradient></defs><rect x="0" y="0" width="${w}" height="${h}" fill="transparent"/>${axis}<line x1="${pL}" y1="${h-pB}" x2="${w-pR}" y2="${h-pB}" stroke="rgba(156,145,118,.45)"/><line x1="${pL}" y1="${pT}" x2="${pL}" y2="${h-pB}" stroke="rgba(156,145,118,.45)"/>${area?`<polygon points="${area}" fill="url(#lineFill${field}${kind})"/>`:''}<polyline points="${points}" fill="none" stroke="#d4af37" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>${circles}${labels}</svg></div></div>`;
-}
-
-function reportView(){
-  const [s,e]=rangeFor(rPreset),data=buildRange(s,e);
-  const tS=data.reduce((a,d)=>a+d.sales,0),tO=data.reduce((a,d)=>a+d.orders,0),avg=tO?tS/tO:0;
-  const best=data.reduce((b,d)=>d.sales>(b?.sales||0)?d:b,null),max=Math.max(...data.map(d=>d.sales),1);
-  const P=[["today","Today"],["yesterday","Yesterday"],["week","Last 7 Days"],["thismonth","This Month"],["lastmonth","Last Month"],["custom","Custom"]];
-  return head("Sales Report",restaurantName+" · "+data.length+" day(s)",'<button class="btn dark" onclick="downloadCSV(\'sales-report\',[\'Date\',\'Day\',\'Orders\',\'Sales\'],buildRange(...rangeFor(rPreset)).map(d=>[d.label,d.dow,d.orders,d.sales]))">Download Report</button>')+
-  `<div class="panel" style="padding:13px;margin-bottom:16px;display:flex;flex-wrap:wrap;gap:8px;align-items:center">📅 ${P.map(([k,l])=>`<button class="chip ${rPreset===k?'active':''}" onclick="rPreset='${k}';render()">${l}</button>`).join("")}
-    ${rPreset==="custom"?`<input type="date" class="input" style="width:auto" value="${rFrom}" onchange="rFrom=this.value;render()"><span style="color:var(--muted)">to</span><input type="date" class="input" style="width:auto" value="${rTo}" onchange="rTo=this.value;render()">`:''}</div>
-  <div class="stats"><div class="stat"><small>Total Sales</small><h2>${rm(tS)}</h2></div><div class="stat"><small>Total Orders</small><h2>${tO}</h2></div><div class="stat"><small>Avg Order</small><h2>${rm(avg)}</h2></div><div class="stat"><small>Best Day</small><h2>${best&&best.sales>0?best.label+" · "+rm(best.sales):'—'}</h2></div></div>
-  ${lineChart(data,'sales','money',data.length===1?'Day total':'Daily Sales')}
-  ${panelTable(["Date","Day","Orders","Avg/Order","Sales"],[...data].reverse().map(d=>[d.label,d.dow,d.orders,rm(d.avg||0),`<b>${rm(d.sales)}</b>`]))}`;
-}
-/* ---------- ANALYTICS ---------- */
-function analyticsView(){
-  const [s,e]=rangeFor("week"),data=buildRange(s,e);
-  const rows=salesLog.filter(r=>{const k=normalizeSaleKey(r.key);return k>=localDateKey(s)&&k<=localDateKey(e);});
-  const tS=rows.reduce((a,r)=>a+Number(r.sales||0),0),tO=rows.length,max=Math.max(...data.map(d=>d.orders),1);
-  const dine=rows.filter(r=>r.type==='dine').reduce((a,r)=>a+Number(r.sales||0),0);
-  const delivery=rows.filter(r=>r.type==='delivery').reduce((a,r)=>a+Number(r.sales||0),0);
-  const take=rows.filter(r=>r.type==='take').reduce((a,r)=>a+Number(r.sales||0),0);
-  const pct=v=>tS?Math.round(v/tS*100)+'%':'0%';
-  return head("Restaurant Analytics",restaurantName+" · Last 7 days")+
-  `<div class="stats"><div class="stat"><small>Total Revenue</small><h2>${rm(tS)}</h2></div><div class="stat"><small>Order Count</small><h2>${tO}</h2></div><div class="stat"><small>Avg Order</small><h2>${rm(tO?tS/tO:0)}</h2></div><div class="stat"><small>Peak Time</small><h2>${tO?'8 PM':'—'}</h2></div></div>
-  ${lineChart(data,'orders','count','Orders per day')}${lineChart(data,'sales','money','Revenue per day')}
-  ${panelTable(["Order Type","Share","Revenue"],[["🍽 Dine-In",pct(dine),`<b>${rm(dine)}</b>`],["🛵 Delivery",pct(delivery),`<b>${rm(delivery)}</b>`],["🛍 Takeaway",pct(take),`<b>${rm(take)}</b>`]])}`;
-}
-/* ---------- MENU (category filter + add modal) ---------- */
-let menuCat="All";
-function menuView(){
-  const list=MENU.filter(m=>menuCat==="All"||m.cat===menuCat);
-  const chips=["All",...new Set(MENU.map(m=>m.cat))].map(c=>`<button class="chip ${menuCat===c?'active':''}" onclick="menuCat='${c}';render()">${c}</button>`).join("");
-  return head("Menu & Dishes",MENU.length+" dishes · tap a dish to edit, or add a new one",'<button class="btn blue" onclick="openDishModal()">+ Add Dish</button>')+
-  `<div class="panel" style="padding:13px;margin-bottom:16px;display:flex;flex-wrap:wrap;gap:8px;align-items:center">🍽 ${chips}</div>
-  <div class="menu-grid">${list.map(m=>`<div class="dish">
-    <div class="img" onclick="pickImage(${m.id})">${m.img?`<img src="${m.img}">`:'🍽'}<span class="up">📷 Upload</span></div>
-    <div class="b" onclick="openDishModal(${m.id})" style="cursor:pointer">
-      <div class="dn">${m.name}</div><div class="dc">${m.cat}</div>
-      ${m.desc?`<div style="font-size:11px;color:var(--muted);margin-top:4px">${m.desc}</div>`:''}
-      <div class="dp">${rm(m.price)}</div>
-    </div>
-  </div>`).join("")}</div>`;
-}
-let imgTarget=null;
-/* ----- Add/Edit Dish Modal ----- */
-let dishEditId=null, dishTempImg=null;
-function openDishModal(id){
-  dishEditId = id||null;
-  const m = id?MENU.find(x=>x.id===id):null;
-  dishTempImg = m?m.img:null;
-  document.getElementById("dishName").value = m?m.name:"";
-  document.getElementById("dishPrice").value = m?m.price:"";
-  document.getElementById("dishDesc").value = m?(m.desc||""):"";
-  // build category select
-  const allCats=[...new Set(MENU.map(x=>x.cat))];
-  const sel=document.getElementById("dishCat");
-  sel.innerHTML=allCats.map(c=>`<option ${m&&m.cat===c?'selected':''}>${c}</option>`).join("")+`<option value="__new">+ New category…</option>`;
-  document.getElementById("dishNewCat").style.display="none";
-  document.getElementById("dishNewCat").value="";
-  document.getElementById("dishModalTitle").textContent = id?"Edit Dish":"Add New Dish";
-  document.getElementById("dishDelete").style.display = id?"inline-block":"none";
-  renderDishImg();
-  document.getElementById("dishModal").classList.add("show");
-}
-function closeDishModal(){document.getElementById("dishModal").classList.remove("show");}
-function renderDishImg(){document.getElementById("dishImgBox").innerHTML = dishTempImg?`<img src="${dishTempImg}" style="width:100%;height:100%;object-fit:cover;border-radius:12px">`:'<div style="text-align:center;color:#8d877c">🍽<br><span style="font-size:11px">Tap to upload photo</span></div>';}
-function pickDishImage(){imgTarget="DISH";document.getElementById("imgInput").click();}
-function onDishCatChange(){const v=document.getElementById("dishCat").value;document.getElementById("dishNewCat").style.display = v==="__new"?"block":"none";}
-function saveDish(){
-  const name=document.getElementById("dishName").value.trim();
-  if(!name){toast("Enter a dish name");return;}
-  const price=parseFloat(document.getElementById("dishPrice").value)||0;
-  let cat=document.getElementById("dishCat").value;
-  if(cat==="__new"){cat=document.getElementById("dishNewCat").value.trim()||"Other";}
-  const desc=document.getElementById("dishDesc").value.trim();
-  if(dishEditId){const m=MENU.find(x=>x.id===dishEditId);Object.assign(m,{name,price,cat,desc,img:dishTempImg});toast(name+" updated");}
-  else{const id=MENU.length?Math.max(...MENU.map(m=>m.id))+1:1;MENU.push({id,name,price,cat,desc,img:dishTempImg});toast(name+" added");}
-  closeDishModal();render();
-}
-function deleteDish(){if(dishEditId){MENU=MENU.filter(m=>m.id!==dishEditId);toast("Dish deleted");closeDishModal();render();}}
-function addBooking(){
-  openFormModal("Add Table Booking",[
-    {name:"c",label:"Customer Name",placeholder:"Customer name"},
-    {name:"t",label:"Table",type:"select",value:"T05",options:safeTableList().map(x=>"T"+String(x.n).padStart(2,"0"))},
-    {name:"time",label:"Time",value:"8:00 PM",placeholder:"8:30 PM"},
-    {name:"g",label:"Guests",type:"number",value:2}
+function addCoupon(){editCoupon(null);}
+function editCoupon(idx){
+  const p=idx!==null?promos[idx]:{};
+  const dishOpts=['Any',...MENU.map(m=>m.name)];
+  const catOpts=['Any',...new Set(MENU.map(m=>m.cat))];
+  openFormModal(idx!==null?'Edit Promotion / Coupon':'Add Promotion / Coupon',[
+    {name:'c',label:'Coupon Code',value:p.c||'',placeholder:'SAVE10',required:true},
+    {name:'t',label:'Promotion Title',value:p.t||'',placeholder:'Student Discount'},
+    {name:'discountType',label:'Discount Type',type:'select',value:p.discountType||'Percentage (%)',options:['Percentage (%)','Fixed Amount (RM)','Free Item','Buy 1 Get 1']},
+    {name:'value',label:'Discount Value',type:'number',value:p.value??10,note:'Example: 10 for 10% or RM10'},
+    {name:'applyOn',label:'Apply On',type:'select',value:p.applyOn||'Entire Bill',options:['Entire Bill','Specific Dish','Specific Category','Dine-In Only','Takeaway Only','Delivery Only']},
+    {name:'dish',label:'Specific Dish',type:'select',value:p.dish||'Any',options:dishOpts},
+    {name:'category',label:'Specific Category',type:'select',value:p.category||'Any',options:catOpts},
+    {name:'minBill',label:'Minimum Bill Amount (RM)',type:'number',value:p.minBill??0,placeholder:'100'},
+    {name:'customerType',label:'Customer Type',type:'select',value:p.customerType||'All Customers',options:['All Customers','Student','Staff','VIP']},
+    {name:'start',label:'Start Date',type:'date',value:p.start||todayKey()},
+    {name:'end',label:'End Date',type:'date',value:p.end||todayKey()},
+    {name:'limit',label:'Usage Limit',type:'number',value:p.limit??0,note:'0 means unlimited'},
+    {name:'s',label:'Status',type:'select',value:p.s||'Active',options:['Active','Inactive']}
   ],d=>{
-    if(!d.c.trim()){toast("Customer name required");return;}
-    bookings.push({c:d.c.trim(),t:d.t,time:d.time||"-",g:parseInt(d.g)||1,s:"Confirmed"});
-    toast("Booking added");
+    const item={c:(d.c||'').trim().toUpperCase(),t:d.t||'Discount',discountType:d.discountType,value:Number(d.value)||0,applyOn:d.applyOn,dish:d.dish,category:d.category,minBill:Number(d.minBill)||0,customerType:d.customerType,start:d.start,end:d.end,limit:Number(d.limit)||0,used:p.used||0,s:d.s||'Active'};
+    if(!item.c){toast('Coupon code required');return false;}
+    if(idx!==null)promos[idx]=item; else promos.push(item);
+    toast(idx!==null?'Promotion updated':'Promotion added');
   });
 }
-function addCoupon(){
-  openFormModal("Add Promotion / Coupon",[
-    {name:"c",label:"Coupon Code",placeholder:"SAVE10"},
-    {name:"t",label:"Title",value:"Discount"},
-    {name:"ty",label:"Order Type",type:"select",value:"Dine-In",options:["Dine-In","Takeaway","Delivery","All"]}
-  ],d=>{
-    if(!d.c.trim()){toast("Coupon code required");return;}
-    promos.push({c:d.c.trim().toUpperCase(),t:d.t||"Discount",ty:d.ty||"Dine-In",s:"Active"});
-    toast("Coupon added");
-  });
-}
+function deleteCoupon(i){promos.splice(i,1);toast('Promotion deleted');render();}
 function addStaff(){
   openFormModal("Add Staff Member",[
-    {name:"u",label:"Staff Name",placeholder:"Staff name"},
+    {name:"u",label:"Staff Name",placeholder:"Staff name",required:true},
     {name:"d",label:"Designation",type:"select",value:"Waiter",options:["Cashier","Waiter","Kitchen","Tandoor","Manager","Admin"]},
     {name:"l",label:"Location / Outlet",value:"Main Branch"}
   ],d=>{
-    if(!d.u.trim()){toast("Staff name required");return;}
-    staff.push({u:d.u.trim(),d:d.d||"Staff",l:d.l||"-",s:"Present",ci:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})});
+    staff.push({u:d.u.trim(),d:d.d||"Staff",l:d.l||"Main Branch",s:"Absent",ci:"-",co:"",hours:0});
     toast(d.u.trim()+" added");
   });
 }
-function toggleStaff(i){const s=staff[i];if(s.s==="Present"){s.s="Absent";s.ci="-";}else{s.s="Present";s.ci=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});}render();}
+function toggleStaff(i){staffCheckIn(i);}
 function downloadCSV(name,cols,rows){
   const csv=[cols.join(","),...rows.map(r=>r.join(","))].join("\n");
   const blob=new Blob([csv],{type:"text/csv"});
@@ -563,6 +514,60 @@ document.getElementById("imgInput").addEventListener("change",function(e){
   r.onload=()=>{if(imgTarget==="LOGO"){logoImg=r.result;renderNav();toast("Logo updated");}else if(imgTarget==="DISH"){dishTempImg=r.result;renderDishImg();imgTarget=null;return;}else{const m=MENU.find(x=>x.id===imgTarget);if(m){m.img=r.result;toast(m.name+" photo updated");}}render();imgTarget=null;};
   r.readAsDataURL(f);e.target.value="";
 });
+
+
+/* ---------- MENU & DISHES ---------- */
+function menuView(){
+  const list=MENU.filter(m=>menuCat==="All"||m.cat===menuCat);
+  const chips=cats().map(c=>`<button class="chip ${menuCat===c?'active':''}" onclick="menuCat='${c}';render()">${c}</button>`).join("");
+  return head("Menu & Dishes",MENU.length+" dishes · tap a dish to edit, or add a new one",'<button class="btn blue" onclick="openDishModal()">+ Add Dish</button>')+
+  `<div class="panel" style="padding:13px;margin-bottom:16px;display:flex;flex-wrap:wrap;gap:8px;align-items:center">${chips}</div>
+  <div class="menu-grid">${list.map(m=>`<div class="dish">
+    <div class="img" onclick="pickImage(${m.id})">${m.img?`<img src="${m.img}">`:'<span style="font-size:30px">🍽</span>'}<span class="up">Upload</span></div>
+    <div class="b" onclick="openDishModal(${m.id})" style="cursor:pointer">
+      <div class="dn">${m.name}</div><div class="dc">${m.cat}</div>
+      ${m.desc?`<div style="font-size:11px;color:var(--muted);margin-top:4px">${m.desc}</div>`:''}
+      <div class="dp">${rm(m.price)}</div>
+    </div>
+  </div>`).join("")}</div>`;
+}
+function openDishModal(id){
+  dishEditId=id||null;
+  const m=id?MENU.find(x=>x.id===id):null;
+  dishTempImg=m?m.img:null;
+  document.getElementById("dishName").value=m?m.name:"";
+  document.getElementById("dishPrice").value=m?m.price:"";
+  document.getElementById("dishDesc").value=m?(m.desc||""):"";
+  const allCats=[...new Set(MENU.map(x=>x.cat))];
+  const sel=document.getElementById("dishCat");
+  sel.innerHTML=allCats.map(c=>`<option ${m&&m.cat===c?'selected':''}>${c}</option>`).join("")+`<option value="__new">+ New category…</option>`;
+  document.getElementById("dishNewCat").style.display="none";
+  document.getElementById("dishNewCat").value="";
+  document.getElementById("dishModalTitle").textContent=id?"Edit Dish":"Add New Dish";
+  document.getElementById("dishDelete").style.display=id?"inline-block":"none";
+  renderDishImg();
+  document.getElementById("dishModal").classList.add("show");
+}
+function closeDishModal(){document.getElementById("dishModal").classList.remove("show");}
+function renderDishImg(){
+  const box=document.getElementById("dishImgBox");
+  if(!box)return;
+  box.innerHTML=dishTempImg?`<img src="${dishTempImg}" style="width:100%;height:100%;object-fit:cover;border-radius:12px">`:'<div style="text-align:center;color:#8d877c">Tap to upload photo</div>';
+}
+function pickDishImage(){imgTarget="DISH";document.getElementById("imgInput").click();}
+function onDishCatChange(){const v=document.getElementById("dishCat").value;document.getElementById("dishNewCat").style.display=v==="__new"?"block":"none";}
+function saveDish(){
+  const name=document.getElementById("dishName").value.trim();
+  if(!name){toast("Enter a dish name");return;}
+  const price=parseFloat(document.getElementById("dishPrice").value)||0;
+  let cat=document.getElementById("dishCat").value;
+  if(cat==="__new")cat=document.getElementById("dishNewCat").value.trim()||"Other";
+  const desc=document.getElementById("dishDesc").value.trim();
+  if(dishEditId){const m=MENU.find(x=>x.id===dishEditId);if(m)Object.assign(m,{name,price,cat,desc,img:dishTempImg});toast(name+" updated");}
+  else{const id=MENU.length?Math.max(...MENU.map(m=>m.id))+1:1;MENU.push({id,name,price,cat,desc,img:dishTempImg});toast(name+" added");}
+  closeDishModal();render();
+}
+function deleteDish(){if(dishEditId){MENU=MENU.filter(m=>m.id!==dishEditId);toast("Dish deleted");closeDishModal();render();}}
 
 /* ---------- CUSTOMERS ---------- */
 function customersView(){
@@ -972,34 +977,25 @@ function customerFeaturesView(){
   const debitSale=saleBy(['Debit Card','Card','Credit Card']);
   const totalSale=paid.reduce((sum,r)=>sum+Number(r.sales||r.total||0),0);
   const cashExp=expBy(['Cash']);
-  const qrExp=expBy(['QR','TNG']);
-  const debitExp=expBy(['Debit Card','Card','Credit Card']);
+  const onlineExp=expBy(['QR','TNG','Debit Card','Card','Credit Card']);
   const totalExp=expenseSum(todayExp);
   const paidOrders=paid.length;
   const unpaidOrders=orders.filter(o=>o.status!=='Paid').length;
   return head('Daily Sales & Expense Summary','Today payment collection, expenses, net cash and order count',`<button class="btn dark" onclick="go('closing')">Daily Closing</button><button class="btn blue" onclick="go('expenses')">Add/View Expenses</button>`)+
-`<div class="stats" style="grid-template-columns:repeat(4,1fr)">
+`<div class="stats" style="grid-template-columns:1fr"><div class="stat"><small>Total Sales Today</small><h2>${rm(totalSale)}</h2></div></div>
+<div class="stats" style="grid-template-columns:repeat(4,1fr);margin-top:12px">
   <div class="stat"><small>Cash Sale</small><h2>${rm(cashSale)}</h2></div>
   <div class="stat"><small>TNG Sale</small><h2>${rm(tngSale)}</h2></div>
   <div class="stat"><small>QR Sale</small><h2>${rm(qrSale)}</h2></div>
   <div class="stat"><small>Debit/Card Sale</small><h2>${rm(debitSale)}</h2></div>
 </div>
-<div class="stats" style="grid-template-columns:repeat(4,1fr);margin-top:12px">
-  <div class="stat"><small>Total Sales</small><h2>${rm(totalSale)}</h2></div>
-  <div class="stat"><small>Total Expenses</small><h2 style="color:var(--red)">${rm(totalExp)}</h2></div>
-  <div class="stat"><small>Net Cash</small><h2>${rm(cashSale-cashExp)}</h2></div>
-  <div class="stat"><small>Paid / Unpaid Orders</small><h2>${paidOrders} / ${unpaidOrders}</h2></div>
+<div class="stats" style="grid-template-columns:repeat(3,1fr);margin-top:12px">
+  <div class="stat"><small>Total Expense</small><h2 style="color:var(--red)">${rm(totalExp)}</h2></div>
+  <div class="stat"><small>Cash Expense</small><h2>${rm(cashExp)}</h2></div>
+  <div class="stat"><small>Online Expense</small><h2>${rm(onlineExp)}</h2><div class="trend">QR + TNG + Debit/Card</div></div>
 </div>
-<div class="grid3" style="grid-template-columns:1fr 1fr;margin-top:16px">
-  <section class="panel" style="padding:18px"><h3>Today Sales by Payment</h3>${panelTable(['Payment Method','Amount'],[
-    ['Cash',rm(cashSale)],['TNG',rm(tngSale)],['QR',rm(qrSale)],['Debit/Card',rm(debitSale)],['Total',`<b>${rm(totalSale)}</b>`]
-  ])}</section>
-  <section class="panel" style="padding:18px"><h3>Today Expenses by Payment</h3>${panelTable(['Payment Method','Amount'],[
-    ['Cash Expense',rm(cashExp)],['QR/TNG Expense',rm(qrExp)],['Debit/Card Expense',rm(debitExp)],['Total Expense',`<b>${rm(totalExp)}</b>`]
-  ])}</section>
-</div>
-<section class="panel" style="padding:18px;margin-top:16px"><h3>Daily Order Summary</h3>${panelTable(['Metric','Value'],[
-  ['Total Orders Today',paidOrders+unpaidOrders],['Paid Orders',paidOrders],['Unpaid Orders',unpaidOrders],['Refund Amount',rm(0)],['Discount Amount',rm(0)]
+<section class="panel" style="padding:18px;margin-top:16px"><h3>Daily Summary</h3>${panelTable(['Metric','Value'],[
+  ['Total Sales',`<b>${rm(totalSale)}</b>`],['Total Expenses',`<b>${rm(totalExp)}</b>`],['Net Cash',`<b>${rm(cashSale-cashExp)}</b>`],['Total Orders Today',paidOrders+unpaidOrders],['Paid Orders',paidOrders],['Unpaid Orders',unpaidOrders],['Refund Amount',rm(0)],['Discount Amount',rm(0)]
 ])}</section>`;
 }
 function sendWhatsappReceipt(i){toast('WhatsApp receipt prepared for '+customers[i].n);}
@@ -1099,6 +1095,54 @@ function closeShiftAuto(){
   toast('Automatic closing saved');
   render();
 }
+function filteredSales(days=1){
+  const now=new Date();
+  const start=new Date(now); start.setDate(now.getDate()-(days-1)); start.setHours(0,0,0,0);
+  return salesLog.filter(r=>{const d=new Date(normalizeSaleKey(r.key)+'T00:00:00'); return !isNaN(d) && d>=start;});
+}
+function groupSalesByDay(list){
+  const map={};
+  list.forEach(r=>{const k=normalizeSaleKey(r.key); if(!map[k]) map[k]={key:k,orders:0,sales:0}; map[k].orders+=1; map[k].sales+=Number(r.sales||r.total||0);});
+  return Object.values(map).sort((a,b)=>a.key.localeCompare(b.key));
+}
+function simpleLineGraph(rows,metric='sales'){
+  const vals=rows.length?rows.map(r=>Number(r[metric]||0)):[0];
+  const max=Math.max(...vals,1);
+  const w=1000,h=210,pad=42;
+  const pts=vals.map((v,i)=>{const x=pad+(rows.length<=1?0:i*(w-pad*2)/(rows.length-1)); const y=h-pad-(v/max)*(h-pad*2); return `${x},${y}`;});
+  const area=`${pad},${h-pad} `+pts.join(' ')+` ${pts[pts.length-1].split(',')[0]},${h-pad}`;
+  const labels=[1,.75,.5,.25,0].map(fr=>{const y=h-pad-fr*(h-pad*2); const val=max*fr; return `<line x1="${pad}" y1="${y}" x2="${w-pad}" y2="${y}" stroke="rgba(0,0,0,.10)"/><text x="8" y="${y+4}" font-size="12" fill="#8f846f">${metric==='sales'?rm(val):Math.round(val)}</text>`;}).join('');
+  return `<section class="panel" style="padding:18px"><h3 style="margin-bottom:10px">${metric==='sales'?'Day total':'Orders per day'}</h3><svg viewBox="0 0 ${w} ${h}" style="width:100%;height:260px;display:block">${labels}<polyline points="${pts.join(' ')}" fill="none" stroke="#d4af37" stroke-width="4" stroke-linecap="round"/><polygon points="${area}" fill="rgba(212,175,55,.22)"/>${pts.map((pt,i)=>{const [x,y]=pt.split(',');return `<circle cx="${x}" cy="${y}" r="5" fill="#d4af37"/><text x="${x}" y="${h-10}" text-anchor="middle" font-size="12" fill="#8f846f">${rows[i]?shortDate(rows[i].key):''}</text>`}).join('')}</svg></section>`;
+}
+function reportView(){
+  const rows=groupSalesByDay(filteredSales(1));
+  const total=rows.reduce((s,r)=>s+r.sales,0);
+  const ordersCount=rows.reduce((s,r)=>s+r.orders,0);
+  const avg=ordersCount?total/ordersCount:0;
+  const best=rows.slice().sort((a,b)=>b.sales-a.sales)[0];
+  return head('Sales Report','Smart POS · 1 day(s)','<button class="btn dark" onclick="window.print()">Download Report</button>')+
+    `<section class="panel" style="padding:14px 18px;display:flex;gap:10px;flex-wrap:wrap"><button class="chip gold">Today</button><button class="chip">Yesterday</button><button class="chip">Last 7 Days</button><button class="chip">This Month</button><button class="chip">Last Month</button><button class="chip">Custom</button></section>`+
+    `<div class="stats"><div class="stat"><small>Total Sales</small><h2>${rm(total)}</h2></div><div class="stat"><small>Total Orders</small><h2>${ordersCount}</h2></div><div class="stat"><small>Avg Order</small><h2>${rm(avg)}</h2></div><div class="stat"><small>Best Day</small><h2>${best?`${shortDate(best.key)} · ${rm(best.sales)}`:'—'}</h2></div></div>`+
+    simpleLineGraph(rows,'sales')+
+    panelTable(['Date','Day','Orders','Avg/Order','Sales'],rows.map(r=>[shortDate(r.key),dayName(r.key),r.orders,rm(r.orders?r.sales/r.orders:0),`<b>${rm(r.sales)}</b>`]));
+}
+function analyticsView(){
+  const rows=groupSalesByDay(filteredSales(7));
+  const total=rows.reduce((s,r)=>s+r.sales,0);
+  const count=rows.reduce((s,r)=>s+r.orders,0);
+  const avg=count?total/count:0;
+  const paid=filteredSales(7);
+  const typeSum=(t)=>paid.filter(r=>(r.type||'take')===t).reduce((s,r)=>s+Number(r.sales||0),0);
+  const dine=typeSum('dine'), take=typeSum('take'), del=typeSum('delivery');
+  return head('Restaurant Analytics','Smart POS · Last 7 days')+
+    `<div class="stats"><div class="stat"><small>Total Revenue</small><h2>${rm(total)}</h2></div><div class="stat"><small>Order Count</small><h2>${count}</h2></div><div class="stat"><small>Avg Order</small><h2>${rm(avg)}</h2></div><div class="stat"><small>Peak Time</small><h2>8 PM</h2></div></div>`+
+    simpleLineGraph(rows,'orders')+
+    panelTable(['Order Type','Share','Revenue'],[
+      ['Dine-In', count?Math.round((dine/Math.max(total,1))*100)+'%':'0%', rm(dine)],
+      ['Takeaway', count?Math.round((take/Math.max(total,1))*100)+'%':'0%', rm(take)],
+      ['Delivery', count?Math.round((del/Math.max(total,1))*100)+'%':'0%', rm(del)]
+    ]);
+}
 function closingView(){const d=closingAutoData();return head('Daily Closing','Auto closing is locked for cashier. Owner/Admin can edit opening cash and expenses from Admin Panel.')+
 `<div class="stats"><div class="stat"><small>Opening Cash</small><h2>${rm(cashierShift.opening)}</h2></div><div class="stat"><small>Auto Total Sales</small><h2>${rm(d.totalSales)}</h2></div><div class="stat"><small>Expenses</small><h2 style="color:var(--red)">${rm(d.totalExpenses)}</h2><div class="trend down">Cash: ${rm(d.cashExpenses)}</div></div><div class="stat"><small>Expected Cash Closing</small><h2>${rm(d.expected)}</h2></div></div>
 <div class="grid3" style="grid-template-columns:1.1fr 1fr"><section class="panel" style="padding:18px"><h3>Automatic Closing Sheet</h3><div class="admin-lock">🔒 Opening cash, expenses and cash count are locked for cashier. Owner/Admin only.</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px"><div><small style="font-weight:900;color:var(--muted)">Opening Cash</small><input class="input readonly-field" readonly value="${cashierShift.opening}"></div><div><small style="font-weight:900;color:var(--muted)">Expenses</small><input class="input readonly-field" readonly value="${d.totalExpenses.toFixed(2)}"></div><div><small style="font-weight:900;color:var(--muted)">Counted Cash</small><input class="input readonly-field" readonly value="${d.actual.toFixed(2)}"></div><div><small style="font-weight:900;color:var(--muted)">Difference</small><input class="input readonly-field" readonly value="${rm(d.diff)}" style="font-weight:900;color:${d.diff<0?'var(--red)':'var(--green)'}"></div></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-top:14px"><div class="mini-card"><small>Cash Sales</small><b>${rm(d.cash)}</b></div><div class="mini-card"><small>Card Sales</small><b>${rm(d.card)}</b></div><div class="mini-card"><small>QR Sales</small><b>${rm(d.qr)}</b></div><div class="mini-card"><small>Cash Expenses</small><b>${rm(d.cashExpenses)}</b></div><div class="mini-card"><small>Other Expenses</small><b>${rm(d.nonCashExpenses)}</b></div></div><div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap"><button class="btn green" onclick="closeShiftAuto()">Close Shift Automatically</button><button class="btn light" onclick="openAdminClosingModal()">Owner/Admin Edit</button><button class="btn blue" onclick="go('expenses')">Add/View Expenses</button><button class="btn dark" onclick="window.print()">Print Closing</button>${cashierShift.closed?`<span class="pill green-pill">Closed ${cashierShift.closedAt||''}</span>`:''}</div></section>
@@ -1113,6 +1157,122 @@ function sendKitchen(no){const o=orders.find(x=>x.no===no); if(!o)return; o.stag
 
 /* ---------- TOAST ---------- */
 let tT;function toast(m){const t=document.getElementById("toast");document.getElementById("toastmsg").textContent=m;t.classList.add("show");clearTimeout(tT);tT=setTimeout(()=>t.classList.remove("show"),1600);}
+
+
+
+/* ---------- FINAL PATCH: STABILITY, SMOOTH UPDATES, TABLE STATUS, CHARTS ---------- */
+function escapeJS(v){return String(v||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/\n/g,' ');}
+function tableNoNorm(v){return String(v||'').replace(/^T/i,'').padStart(2,'0');}
+function findTableStatus(n){const nn=Number(String(n||'').replace(/^T/i,''));return safeTableList().find(t=>Number(t.n)===nn);}
+function setTableAuto(table,status){
+  if(!table||table==='—'||table==='-')return;
+  const t=findTableStatus(table);
+  if(t){t.s=status;t.guest=status==='available'?0:(t.guest||2);} 
+  const old=tables.find(x=>Number(x.n)===Number(String(table).replace(/^T/i,''))); if(old)old.occ=status==='occupied';
+}
+function syncTablesWithOrders(){
+  const activeTables=new Set((orders||[]).filter(o=>o.type==='dine' && o.status!=='Paid' && o.table && o.table!=='—').map(o=>String(o.table).replace(/^T/i,'').padStart(2,'0')));
+  safeTableList().forEach(t=>{const key=String(t.n).padStart(2,'0'); if(activeTables.has(key)){t.s='occupied';t.guest=t.guest||2;} else if(t.s==='occupied'){t.s='available';t.guest=0;}});
+  (tables||[]).forEach(t=>{const key=String(t.n).padStart(2,'0'); t.occ=activeTables.has(key);});
+}
+const _oldSavePaidSale = savePaidSale;
+savePaidSale=function(o,method){_oldSavePaidSale(o,method); if(o&&o.table)setTableAuto(o.table,'available'); queueSave();};
+const _oldCreateOrder = createOrder;
+createOrder=function(){
+  if(!cart.length)return;
+  const table=document.getElementById('mtable')?.value;
+  const o={no:'#'+seq++,inv:uid(),type:cType,table:cType==='dine'?(table||'—'):null,status:'Unpaid',stage:0,age:'just now',items:cart.map(i=>({...i,cat:i.cat||MENU.find(m=>m.id===i.id)?.cat,station:stationOf(i)}))};
+  orders.unshift(o); selNo=o.no; if(o.type==='dine')setTableAuto(o.table,'occupied'); closeModal(); cart=[]; toast('Order '+o.no+' created'); if(nav!=='pos')go('pos'); else render(); queueSave();
+};
+const _oldSendWaiterOrder = sendWaiterOrder;
+sendWaiterOrder=function(){
+  if(!cart.length)return;
+  const table=(document.getElementById('wtable')?.value||window.wTable||'').trim();
+  const o={no:'#'+seq++,inv:uid(),type:cType,table:cType==='dine'?(table||'—'):null,status:'Unpaid',stage:0,age:'just now',note:wNote,customer:wCustomer,phone:wPhone,address:wAddress,items:cart.map(i=>({...i,station:stationOf(i)}))};
+  orders.unshift(o); selNo=o.no; if(o.type==='dine')setTableAuto(o.table,'occupied'); cart=[]; wNote=''; toast('Order '+o.no+' created'); go('pos'); queueSave();
+};
+const _oldCreateQuickOrder = createQuickOrder;
+createQuickOrder=function(){const o={no:'#'+seq++,inv:uid(),type:'take',table:null,status:'Unpaid',stage:0,age:'just now',items:cart.map(i=>({...i,cat:i.cat||MENU.find(m=>m.id===i.id)?.cat,station:stationOf(i)}))};orders.unshift(o);selNo=o.no;cart=[];if(kotAutoPrint){setTimeout(()=>printKOT(o),100)}else{toast('Order '+o.no+' created')}go('pos');queueSave();};
+const _oldFinishPayment = finishPayment;
+finishPayment=function(no,afterComplete=false,doPrint=false){
+  const o=orders.find(x=>x.no===no); if(o&&o.table)setTableAuto(o.table,'available');
+  if(doPrint && o) printReceipt(no);
+  const ap=document.getElementById('afterPaymentModal'); if(ap)ap.remove();
+  if(afterComplete){orders=orders.filter(x=>x.no!==no);selNo=orders[0]?orders[0].no:null;toast(no+' completed');}
+  else{toast(no+' settled');}
+  syncTablesWithOrders(); render(); queueSave();
+};
+
+function smoothQty(no,id,d){const o=orders.find(x=>x.no===no);if(!o)return;const it=o.items.find(i=>i.id===id);if(!it)return;it.qty+=d;if(it.qty<=0)o.items=o.items.filter(i=>i.id!==id);refreshOrderPanels(false);}
+qty=function(no,id,d){smoothQty(no,id,d);};
+setStage=function(no,s){const o=orders.find(x=>x.no===no);if(o)o.stage=s;refreshOrderPanels(false);};
+nextStage=function(no){const o=orders.find(x=>x.no===no);if(!o)return;if(o.stage<3)o.stage++;toast('Stage: '+FLOW[o.stage]);refreshOrderPanels(false);};
+setTab=function(t){tab=t;refreshOrderPanels(true);};
+selectOrder=function(no){selNo=no;refreshOrderPanels(true);};
+function selectPastOrder(no){selNo=no;refreshOrderPanels(true);}
+function refreshOrderPanels(updateList=false){
+  const running=orders, stats=todayOrderStats(), past=pastSalesToday();
+  const sel=tab==='past'?past.find(o=>o.no===selNo):orders.find(o=>o.no===selNo);
+  const ps=document.getElementById('posStats'); if(ps)ps.innerHTML=posStatsHtml(running,stats);
+  if(updateList){const ol=document.getElementById('orderList'); if(ol)ol.innerHTML=listOrders();}
+  const od=document.getElementById('orderDetailsPanel'); if(od)od.innerHTML=orderDetailsPanelHtml(sel);
+  const bp=document.getElementById('billPanel'); if(bp)bp.innerHTML=billPanelHtml(sel);
+  queueSave();
+}
+updatePOSPartial=refreshOrderPanels;
+
+function quickBillHtml(){
+  const sub=cart.reduce((s,i)=>s+i.price*i.qty,0);
+  return `<div class="panel-head"><h3>Current Bill</h3><span class="pill">${cart.length} items</span></div><div class="m-lines" style="max-height:450px">${cart.length?cart.map(i=>`<div class="m-line"><div class="ml-n">${i.name}</div><button class="step" onclick="quickChange(${i.id},-1)">−</button><div class="ml-q">${i.qty}</div><button class="step" onclick="quickChange(${i.id},1)">+</button><div class="ml-p">${rm(i.price*i.qty)}</div></div>`).join(''):'<div class="empty">Click food item to add</div>'}</div><div class="m-tot"><div class="l"><span>Subtotal</span><span>${rm(sub)}</span></div><div class="l"><span>Service 5%</span><span>${rm(sub*SERVICE)}</span></div><div class="l"><span>SST 6%</span><span>${rm(sub*TAX)}</span></div><div class="t"><span>Total</span><span>${rm(sub+sub*SERVICE+sub*TAX)}</span></div></div><button class="m-create" onclick="createQuickOrder()" ${cart.length?'':'disabled'}>Create Order & Print</button>`;
+}
+function updateQuickBill(){const el=document.getElementById('quickBillPanel'); if(el)el.innerHTML=quickBillHtml(); queueSave();}
+addQuick=function(id){const m=MENU.find(x=>x.id===id),e=cart.find(i=>i.id===id);if(e)e.qty++;else cart.push({id:m.id,name:m.name,price:m.price,qty:1,cat:m.cat});updateQuickBill();};
+function quickChange(id,d){const i=cart.find(x=>x.id===id);if(!i)return;i.qty+=d;if(i.qty<=0)cart=cart.filter(x=>x.id!==id);updateQuickBill();}
+quickPosView=function(){return head('Quick POS Billing','Restaurant style POS: categories, HD dish cards, cart, discount, tax and receipt','<button class="btn blue" onclick="openModal()">+ Start New Bill</button>')+`<div class="panel" style="padding:18px;margin-bottom:16px"><div style="display:grid;grid-template-columns:1fr 360px;gap:16px"><div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">${cats().map(c=>`<button class="chip ${mCat===c?'active':''}" onclick="mCat='${c}';render()">${c}</button>`).join('')}</div><div class="menu-grid">${MENU.filter(m=>mCat==='All'||m.cat===mCat).map(m=>`<div class="dish" onclick="addQuick(${m.id})" style="cursor:pointer"><div class="img">${m.img?`<img src="${m.img}">`:'🍽'}</div><div class="b"><h4>${m.name}</h4><p>${m.cat}</p><b>${rm(m.price)}</b></div></div>`).join('')}</div></div><div class="panel" id="quickBillPanel" style="box-shadow:none">${quickBillHtml()}</div></div></div>`;};
+
+function waiterCartHtml(){
+  const sub=cart.reduce((s,i)=>s+i.price*i.qty,0);
+  return `<div class="panel-head"><h3>Current Order</h3><span class="pill">${cart.length} items</span></div><div class="m-lines" style="max-height:370px">${cart.length?cart.map(i=>`<div class="m-line"><div class="ml-n">${i.name}<small style="display:block;color:var(--muted);font-size:11px">${stationIcon(stationOf(i))} ${stationOf(i)}</small></div><button class="step" onclick="waiterChange(${i.id},-1)">−</button><div class="ml-q">${i.qty}</div><button class="step" onclick="waiterChange(${i.id},1)">+</button><div class="ml-p">${rm(i.price*i.qty)}</div></div>`).join(''):'<div class="empty">Tap menu item to add</div>'}</div><div style="padding:14px;border-top:1px solid var(--line)"><textarea class="input" style="height:80px;resize:none" placeholder="Kitchen note: no onion, extra spicy..." oninput="wNote=this.value">${wNote}</textarea></div><div class="m-tot" style="padding:0 14px 10px"><div class="l"><span>Subtotal</span><span>${rm(sub)}</span></div><div class="t"><span>Kitchen Total</span><span>${rm(sub)}</span></div></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:14px"><button class="btn light" onclick="clearWaiterCart()">Clear</button><button class="btn green" onclick="sendWaiterOrder()" ${cart.length?'':'disabled'}>Send To Kitchen</button></div>`;
+}
+function updateWaiterBill(){const el=document.getElementById('waiterBillPanel'); if(el)el.innerHTML=waiterCartHtml(); queueSave();}
+addWaiterItem=function(id){const m=MENU.find(x=>x.id===id),e=cart.find(i=>i.id===id);if(e)e.qty++;else cart.push({id:m.id,name:m.name,price:m.price,qty:1,cat:m.cat});updateWaiterBill();};
+function waiterChange(id,d){const i=cart.find(x=>x.id===id);if(!i)return;i.qty+=d;if(i.qty<=0)cart=cart.filter(x=>x.id!==id);updateWaiterBill();}
+clearWaiterCart=function(){cart=[];wNote='';updateWaiterBill();};
+const _oldWaiterView = waiterView;
+waiterView=function(){
+  const tableOpts=safeTableList().map(t=>`<option value="${String(t.n).padStart(2,'0')}">T${String(t.n).padStart(2,'0')} — ${tLabel(t.s)}</option>`).join('');
+  return head('Waiter Order Screen','Fast order taking for table and takeaway')+`<div class="grid3" style="grid-template-columns:1.2fr .8fr"><section class="panel" style="padding:16px"><div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px"><div><label style="font-weight:900;font-size:12px;color:var(--muted)">Order Type</label><select class="input" onchange="cType=this.value">${TYPES.map(t=>`<option value="${t.k}" ${cType===t.k?'selected':''}>${t.l}</option>`).join('')}</select></div><div><label style="font-weight:900;font-size:12px;color:var(--muted)">Table</label><select class="input" id="wtable">${tableOpts}</select></div></div><div style="display:flex;gap:8px;flex-wrap:wrap;margin:14px 0">${cats().map(c=>`<button class="chip ${mCat===c?'active':''}" onclick="mCat='${c}';render()">${c}</button>`).join('')}</div><div class="menu-grid">${MENU.filter(m=>mCat==='All'||m.cat===mCat).map(m=>`<div class="dish" onclick="addWaiterItem(${m.id})" style="cursor:pointer"><div class="img">${m.img?`<img src="${m.img}">`:'🍽'}</div><div class="b"><h4>${m.name}</h4><p>${m.cat}</p><b>${rm(m.price)}</b></div></div>`).join('')}</div></section><section class="panel" id="waiterBillPanel" style="padding:0;overflow:hidden">${waiterCartHtml()}</section></div>`;
+};
+
+function setTableStatusSmooth(n,s){const t=safeTableList().find(x=>Number(x.n)===Number(n)); if(t){t.s=s;t.guest=s==='available'?0:(t.guest||2);} const old=tables.find(x=>Number(x.n)===Number(n)); if(old)old.occ=s==='occupied'; const wrap=document.getElementById('tablesWrap'); if(wrap)wrap.innerHTML=tableCardsHtml(); const stats=document.getElementById('tableStats'); if(stats)stats.innerHTML=tableStatsHtml(); queueSave();}
+function tableStatsHtml(){const list=safeTableList(); const cnt=s=>list.filter(t=>t.s===s).length;return `<div class="stat"><small>Available</small><h2 style="color:var(--green)">${cnt('available')}</h2></div><div class="stat"><small>Occupied</small><h2 style="color:var(--red)">${cnt('occupied')}</h2></div><div class="stat"><small>Reserved</small><h2 style="color:var(--orange)">${cnt('reserved')}</h2></div><div class="stat"><small>Cleaning</small><h2>${cnt('cleaning')}</h2></div>`;}
+function tableCardsHtml(){const list=safeTableList();return `<div class="grid3" style="grid-template-columns:repeat(auto-fill,minmax(150px,1fr))">${list.map(t=>`<div class="tbig ${tClass(t.s)}" style="position:relative"><div onclick="openTableOrder(${t.n})">T${String(t.n).padStart(2,'0')}<small>${tLabel(t.s)} ${t.guest?`· ${t.guest} pax`:''}</small></div><div style="display:flex;gap:5px;justify-content:center;margin-top:12px;flex-wrap:wrap"><button class="chip" onclick="setTableStatusSmooth(${t.n},'available')">Free</button><button class="chip" onclick="setTableStatusSmooth(${t.n},'occupied')">Busy</button><button class="chip" onclick="setTableStatusSmooth(${t.n},'reserved')">Reserve</button></div></div>`).join('')}</div>`;}
+tablesView=function(){syncTablesWithOrders();return head('Visual Table Layout','Click table to open order. Table becomes busy until bill is completed.')+`<div class="stats" id="tableStats">${tableStatsHtml()}</div><div class="panel" id="tablesWrap" style="padding:18px">${tableCardsHtml()}</div><div class="panel" style="padding:16px;margin-top:16px"><b>Table Actions</b><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button class="btn blue" onclick="transferTable()">Transfer Table</button><button class="btn light" onclick="mergeTable()">Merge Tables</button></div></div>`;};
+
+function polishedLineGraph(rows,metric='sales'){
+  const title=metric==='sales'?'Day total':'Orders per day';
+  const vals=rows.length?rows.map(r=>Number(r[metric]||0)):[0];
+  let max=Math.max(...vals,1); max=max===1?1:max*1.18;
+  const w=1100,h=260,left=110,right=35,top=28,bottom=52,innerW=w-left-right,innerH=h-top-bottom;
+  const xFor=i=>left+(rows.length<=1?innerW/2:i*innerW/(rows.length-1));
+  const yFor=v=>top+innerH-(v/max)*innerH;
+  const pts=vals.map((v,i)=>`${xFor(i)},${yFor(v)}`);
+  const area=`${xFor(0)},${top+innerH} ${pts.join(' ')} ${xFor(vals.length-1)},${top+innerH}`;
+  const labels=[1,.75,.5,.25,0].map(fr=>{const y=top+innerH-fr*innerH; const val=max*fr; return `<line x1="${left}" y1="${y}" x2="${w-right}" y2="${y}" stroke="rgba(0,0,0,.10)"/><text x="${left-18}" y="${y+4}" font-size="13" text-anchor="end" fill="#8f846f">${metric==='sales'?rm(val):Math.round(val)}</text>`;}).join('');
+  const line=pts.length>1?`<polyline points="${pts.join(' ')}" fill="none" stroke="#d4af37" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>`:`<line x1="${xFor(0)-80}" y1="${yFor(vals[0])}" x2="${xFor(0)+80}" y2="${yFor(vals[0])}" stroke="#d4af37" stroke-width="4" stroke-linecap="round"/>`;
+  return `<section class="panel chart-panel" style="padding:18px"><h3 style="margin-bottom:10px">${title}</h3><svg viewBox="0 0 ${w} ${h}" style="width:100%;height:300px;display:block;overflow:visible">${labels}<polygon points="${area}" fill="rgba(212,175,55,.18)"/>${line}${pts.map((pt,i)=>{const [x,y]=pt.split(',');return `<circle cx="${x}" cy="${y}" r="6" fill="#d4af37" stroke="#fff" stroke-width="2"/><text x="${x}" y="${h-18}" text-anchor="middle" font-size="13" fill="#8f846f">${rows[i]?shortDate(rows[i].key):''}</text>`}).join('')}</svg></section>`;
+}
+simpleLineGraph=polishedLineGraph;
+reportView=function(){const rows=groupSalesByDay(filteredSales(1));const total=rows.reduce((s,r)=>s+r.sales,0);const ordersCount=rows.reduce((s,r)=>s+r.orders,0);const avg=ordersCount?total/ordersCount:0;const best=rows.slice().sort((a,b)=>b.sales-a.sales)[0];return head('Sales Report','Smart POS · 1 day(s)','<button class="btn dark" onclick="window.print()">Download Report</button>')+`<section class="panel" style="padding:14px 18px;display:flex;gap:10px;flex-wrap:wrap"><button class="chip gold">Today</button><button class="chip">Yesterday</button><button class="chip">Last 7 Days</button><button class="chip">This Month</button><button class="chip">Last Month</button><button class="chip">Custom</button></section>`+`<div class="stats"><div class="stat"><small>Total Sales</small><h2>${rm(total)}</h2></div><div class="stat"><small>Total Orders</small><h2>${ordersCount}</h2></div><div class="stat"><small>Avg Order</small><h2>${rm(avg)}</h2></div><div class="stat"><small>Best Day</small><h2>${best?`${shortDate(best.key)} · ${rm(best.sales)}`:'—'}</h2></div></div>`+polishedLineGraph(rows,'sales')+panelTable(['Date','Day','Orders','Avg/Order','Sales'],rows.map(r=>[shortDate(r.key),dayName(r.key),r.orders,rm(r.orders?r.sales/r.orders:0),`<b>${rm(r.sales)}</b>`]));};
+analyticsView=function(){const rows=groupSalesByDay(filteredSales(7));const total=rows.reduce((s,r)=>s+r.sales,0);const count=rows.reduce((s,r)=>s+r.orders,0);const avg=count?total/count:0;const paid=filteredSales(7);const typeSum=t=>paid.filter(r=>(r.type||'take')===t).reduce((s,r)=>s+Number(r.sales||0),0);const dine=typeSum('dine'),take=typeSum('take'),del=typeSum('delivery');return head('Restaurant Analytics','Smart POS · Last 7 days')+`<div class="stats"><div class="stat"><small>Total Revenue</small><h2>${rm(total)}</h2></div><div class="stat"><small>Order Count</small><h2>${count}</h2></div><div class="stat"><small>Avg Order</small><h2>${rm(avg)}</h2></div><div class="stat"><small>Peak Time</small><h2>8 PM</h2></div></div>`+polishedLineGraph(rows,'orders')+panelTable(['Order Type','Share','Revenue'],[['Dine-In',total?Math.round((dine/total)*100)+'%':'0%',rm(dine)],['Takeaway',total?Math.round((take/total)*100)+'%':'0%',rm(take)],['Delivery',total?Math.round((del/total)*100)+'%':'0%',rm(del)]]);};
+
+
+const _baseAppState=appState;
+appState=function(){const st=_baseAppState();st.tableStatuses=tableStatuses;st.paymentMethods=paymentMethods;st.cashierShift=cashierShift;return st;};
+const _baseApplyState=applyState;
+applyState=function(s){_baseApplyState(s);if(Array.isArray(s?.tableStatuses))tableStatuses=s.tableStatuses;if(Array.isArray(s?.paymentMethods))paymentMethods=s.paymentMethods;if(s?.cashierShift)cashierShift={...cashierShift,...s.cashierShift};syncTablesWithOrders();};
+
+/* ---------- END FINAL PATCH ---------- */
 
 // read role from login (?role=waiter/cashier/owner)
 (function(){const p=new URLSearchParams(location.search).get("role");if(p==="waiter"){role="waiter";}})();
