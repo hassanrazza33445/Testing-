@@ -1420,3 +1420,143 @@ if(dbReady){loadCloud(); setInterval(loadCloudSilent,6000);}
 if(role==="waiter"){document.getElementById("roleCashier").classList.remove("active");document.getElementById("roleWaiter").classList.add("active");}
 if(role==="kitchen"){document.getElementById("roleCashier").classList.remove("active");document.getElementById("roleKitchen")?.classList.add("active");}
 if(role==="tandoor"){document.getElementById("roleCashier").classList.remove("active");document.getElementById("roleTandoor")?.classList.add("active");}
+
+
+/* ---------- CRITICAL FIX PATCH: Inventory route + real line graphs ---------- */
+function invAlertSafe(i){
+  const n = Number(i && (i.alert ?? i.lowWarning ?? i.low ?? i.warning));
+  return Number.isFinite(n) ? n : 5;
+}
+window.invAlert = invAlertSafe;
+function normalizeInventoryItem(i){
+  if(!i || typeof i !== 'object') return {i:'Ingredient',q:0,u:'kg',alert:5,s:'out'};
+  const name = i.i || i.name || i.ingredient || i.product_name || 'Ingredient';
+  const qty = Number(i.q ?? i.quantity ?? i.stock ?? 0);
+  const unit = i.u || i.unit || 'kg';
+  const alert = invAlertSafe(i);
+  return { ...i, i:name, q:Number.isFinite(qty)?qty:0, u:unit, alert, s:invStatus(Number.isFinite(qty)?qty:0, alert) };
+}
+invView = function(){
+  inventory = Array.isArray(inventory) ? inventory.map(normalizeInventoryItem) : [];
+  const out=inventory.filter(i=>i.s==='out').length;
+  const low=inventory.filter(i=>i.s==='low').length;
+  const good=inventory.filter(i=>i.s==='good').length;
+  const alerts=inventory.filter(i=>i.s!=='good');
+  return head('Inventory','Ingredient stock and low-stock alerts','<button class="btn blue" onclick="addIngredient()">+ Add Ingredient</button>')+
+  `<div class="stats" style="grid-template-columns:repeat(3,1fr)"><div class="stat"><small>Out of Stock</small><h2 style="color:var(--red)">${out}</h2></div><div class="stat"><small>Low Stock</small><h2 style="color:var(--orange)">${low}</h2></div><div class="stat"><small>In Stock</small><h2 style="color:var(--green)">${good}</h2></div></div>`+
+  (alerts.length?`<div class="panel" style="padding:14px;margin-bottom:14px;border-left:5px solid var(--orange)"><b>Low Stock Warning</b><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">${alerts.map(i=>`<span class="pill ${i.s==='out'?'red-pill':'blue-pill'}">${i.i}: ${i.q} ${i.u} / alert ${invAlertSafe(i)} ${i.u}</span>`).join('')}</div></div>`:'')+
+  panelTable(['Ingredient','Stock','Unit','Low Warning','Status','Adjust','Action'],inventory.map((i,idx)=>[
+    `<b>${i.i}</b>`,
+    i.q,
+    i.u,
+    `≤ ${invAlertSafe(i)} ${i.u}`,
+    pill(i.s==='good'?'In Stock':i.s==='low'?'Low Stock':'Out of Stock',i.s==='good'?'green':'red'),
+    `<button class="step" onclick="adjStock(${idx},-1)">−</button> <button class="step" onclick="adjStock(${idx},1)">+</button>`,
+    `<button class="chip" onclick="editIngredient(${idx})">Edit</button>`
+  ]));
+};
+adjStock=function(idx,d){const it=inventory[idx]; if(!it)return; it.q=Math.max(0,Number(it.q||0)+d); it.alert=invAlertSafe(it); it.s=invStatus(it.q,it.alert); render();};
+editIngredient=function(idx){
+  inventory=Array.isArray(inventory)?inventory.map(normalizeInventoryItem):[];
+  const it=inventory[idx]; if(!it)return;
+  openFormModal('Edit Ingredient',[
+    {name:'name',label:'Ingredient name',value:it.i,required:true},
+    {name:'q',label:'Quantity',type:'number',value:it.q},
+    {name:'u',label:'Unit',type:'select',value:it.u||'kg',options:['kg','liter','piece']},
+    {name:'alert',label:'Low stock warning at',type:'number',value:invAlertSafe(it)}
+  ],d=>{
+    const q=parseFloat(d.q); const alert=parseFloat(d.alert);
+    it.i=(d.name||it.i).trim();
+    it.q=Number.isFinite(q)?q:0;
+    it.u=d.u||'kg';
+    it.alert=Number.isFinite(alert)?alert:0;
+    it.s=invStatus(it.q,it.alert);
+    inventory[idx]=it;
+    toast('Ingredient updated');
+    render();
+  });
+};
+addIngredient=function(){
+  openFormModal('Add Ingredient',[
+    {name:'name',label:'Ingredient name',required:true},
+    {name:'q',label:'Quantity',type:'number',value:10},
+    {name:'u',label:'Unit',type:'select',value:'kg',options:['kg','liter','piece']},
+    {name:'alert',label:'Low stock warning at',type:'number',value:5,placeholder:'Example: 5'}
+  ],d=>{if(!d.name){toast('Ingredient name required');return false;} const q=parseFloat(d.q)||0; const u=d.u||'kg'; const alert=parseFloat(d.alert)||0; inventory.push({i:d.name.trim(),q,u,alert,s:invStatus(q,alert)}); toast(d.name+' added');});
+};
+function parseSaleTime(r){
+  const key=normalizeSaleKey(r.key||r.date||todayKey());
+  const t=String(r.time||'');
+  const m=t.match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+  let h=12;
+  if(m){ h=Number(m[1]); const ap=(m[3]||'').toUpperCase(); if(ap==='PM'&&h<12)h+=12; if(ap==='AM'&&h===12)h=0; }
+  return {key,h};
+}
+function trendRowsForSales(list, metric){
+  const range=salesReportRange||'today';
+  const now=new Date();
+  if(range==='today' || range==='yesterday'){
+    const by={};
+    (list||[]).forEach(r=>{const t=parseSaleTime(r); const label=String(t.h).padStart(2,'0')+':00'; if(!by[label])by[label]={key:label,sales:0,orders:0}; by[label].sales+=Number(r.sales||r.total||0); by[label].orders+=Number(r.orders||1);});
+    let rows=Object.values(by).sort((a,b)=>Number(a.key.slice(0,2))-Number(b.key.slice(0,2)));
+    if(rows.length===1){ const h=Number(rows[0].key.slice(0,2)); rows=[{key:String(Math.max(0,h-1)).padStart(2,'0')+':00',sales:0,orders:0}, rows[0]]; }
+    return rows.length?rows:[{key:'00:00',sales:0,orders:0},{key:'23:00',sales:0,orders:0}];
+  }
+  const rows=groupedSalesFromList(list||[]);
+  if(rows.length===1){
+    const d=dateObjFromKey(rows[0].key); const prev=new Date(d); prev.setDate(prev.getDate()-1);
+    return [{key:localDateKey(prev),sales:0,orders:0}, rows[0]];
+  }
+  return rows.length?rows:[{key:todayKey(),sales:0,orders:0}];
+}
+function prettyX(k){ return String(k).includes(':') ? String(k) : shortDate(k); }
+function properLineGraph(rows, metric='sales', title='Day total'){
+  const data=(rows&&rows.length)?rows:[{key:todayKey(),sales:0,orders:0}];
+  const vals=data.map(r=>Number(r[metric]||0));
+  const maxRaw=Math.max(...vals, metric==='sales'?10:1);
+  const max=metric==='orders'?Math.max(5,Math.ceil(maxRaw*1.25)):Math.max(10,maxRaw*1.25);
+  const w=1240,h=340,left=96,right=60,top=48,bottom=58,iw=w-left-right,ih=h-top-bottom;
+  const x=i=>left+(data.length===1?iw/2:i*iw/(data.length-1));
+  const y=v=>top+ih-(v/max)*ih;
+  const ticks=[1,.75,.5,.25,0];
+  const grid=ticks.map(fr=>{const yy=top+ih-fr*ih; const val=max*fr; const lab=metric==='sales'?rm(val):String(Math.round(val)); return `<line x1="${left}" y1="${yy}" x2="${w-right}" y2="${yy}" stroke="rgba(150,130,90,.18)"/><text x="${left-14}" y="${yy+5}" text-anchor="end" font-size="13" fill="#8e826d">${lab}</text>`}).join('');
+  const pts=vals.map((v,i)=>[x(i),y(v)]);
+  const poly=`<polyline points="${pts.map(p=>p.join(',')).join(' ')}" fill="none" stroke="#d4af37" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>`;
+  const fill=pts.length>1?`<polygon points="${pts[0][0]},${top+ih} ${pts.map(p=>p.join(',')).join(' ')} ${pts[pts.length-1][0]},${top+ih}" fill="rgba(212,175,55,.12)"/>`:'';
+  const every=Math.max(1,Math.ceil(data.length/8));
+  const points=pts.map((p,i)=>`<circle cx="${p[0]}" cy="${p[1]}" r="5" fill="#d4af37" stroke="#fff" stroke-width="2"/>${i%every===0||i===data.length-1?`<text x="${p[0]}" y="${h-20}" text-anchor="middle" font-size="12" fill="#8e826d">${prettyX(data[i].key)}</text>`:''}`).join('');
+  const last=pts[pts.length-1]; const lastVal=vals[vals.length-1];
+  const label=last?`<text x="${Math.min(w-right-5,last[0]+8)}" y="${Math.max(22,last[1]-10)}" text-anchor="start" font-size="13" font-weight="800" fill="#9b7600">${metric==='sales'?rm(lastVal):lastVal}</text>`:'';
+  return `<section class="panel" style="padding:20px;margin-top:16px"><h3 style="margin:0 0 8px">${title}</h3><svg viewBox="0 0 ${w} ${h}" style="width:100%;height:340px;display:block;overflow:visible">${grid}${fill}${poly}${points}${label}</svg></section>`;
+}
+professionalLineGraph=properLineGraph; simpleLineGraph=properLineGraph; polishedLineGraph=properLineGraph; cleanLineGraph=properLineGraph; fixedLineGraph=properLineGraph;
+reportView=function(){
+  const list=filteredSalesBySelectedRange();
+  const tableRows=groupedSalesFromList(list);
+  const chartRows=trendRowsForSales(list,'sales');
+  const total=tableRows.reduce((s,r)=>s+r.sales,0), ordersCount=tableRows.reduce((s,r)=>s+r.orders,0), avg=ordersCount?total/ordersCount:0;
+  const best=tableRows.slice().sort((a,b)=>b.sales-a.sales)[0];
+  return head('Sales Report','Smart POS · '+reportRangeLabel(),'<button class="btn dark" onclick="window.print()">Download Report</button>')+
+  rangeFilterButtons()+
+  `<div class="stats"><div class="stat"><small>Total Sales</small><h2>${rm(total)}</h2></div><div class="stat"><small>Total Orders</small><h2>${ordersCount}</h2></div><div class="stat"><small>Avg Order</small><h2>${rm(avg)}</h2></div><div class="stat"><small>Best Day</small><h2>${best?`${shortDate(best.key)} · ${rm(best.sales)}`:'—'}</h2></div></div>`+
+  properLineGraph(chartRows,'sales','Day total')+panelTable(['Date','Day','Orders','Avg/Order','Sales'],tableRows.map(r=>[shortDate(r.key),dayName(r.key),r.orders,rm(r.orders?r.sales/r.orders:0),`<b>${rm(r.sales)}</b>`]));
+};
+analyticsView=function(){
+  const now=new Date(); const start=new Date(now); start.setDate(start.getDate()-6);
+  const paid=salesLog.filter(s=>{const d=dateObjFromKey(normalizeSaleKey(s.key||s.date||todayKey())); return d>=new Date(start.getFullYear(),start.getMonth(),start.getDate()) && d<=new Date(now.getFullYear(),now.getMonth(),now.getDate(),23,59,59);});
+  const map={}; for(let i=0;i<7;i++){const d=new Date(start); d.setDate(start.getDate()+i); const k=localDateKey(d); map[k]={key:k,sales:0,orders:0};}
+  paid.forEach(r=>{const k=normalizeSaleKey(r.key||r.date||todayKey()); if(!map[k])map[k]={key:k,sales:0,orders:0}; map[k].sales+=Number(r.sales||r.total||0); map[k].orders+=Number(r.orders||1);});
+  const rows=Object.values(map).sort((a,b)=>dateObjFromKey(a.key)-dateObjFromKey(b.key));
+  const total=rows.reduce((s,r)=>s+r.sales,0), count=rows.reduce((s,r)=>s+r.orders,0), avg=count?total/count:0;
+  const typeSum=t=>paid.filter(r=>(r.type||'take')===t).reduce((s,r)=>s+Number(r.sales||0),0); const dine=typeSum('dine'), take=typeSum('take'), del=typeSum('delivery');
+  return head('Restaurant Analytics','Smart POS · Last 7 days')+`<div class="stats"><div class="stat"><small>Total Revenue</small><h2>${rm(total)}</h2></div><div class="stat"><small>Order Count</small><h2>${count}</h2></div><div class="stat"><small>Avg Order</small><h2>${rm(avg)}</h2></div><div class="stat"><small>Peak Time</small><h2>8 PM</h2></div></div>`+properLineGraph(rows,'orders','Orders per day')+panelTable(['Order Type','Share','Revenue'],[['Dine-In',total?Math.round((dine/total)*100)+'%':'0%',rm(dine)],['Takeaway',total?Math.round((take/total)*100)+'%':'0%',rm(take)],['Delivery',total?Math.round((del/total)*100)+'%':'0%',rm(del)]]);
+};
+window.go=function(k){ nav=k; renderNav(); render(); };
+window.render=function(){
+  const m=document.getElementById('main'); if(!m)return;
+  const map={pos:posView,waiter:waiterView,quickpos:quickPosView,tables:tablesView,reports:reportView,closing:closingView,analytics:analyticsView,menu:menuView,recipes:recipesView,qr:qrView,promotions:promoView,staff:staffView,roles:rolesView,cashier:cashierFeaturesView,customers:customerFeaturesView,inventory:invView,expenses:expensesView,kotprinter:kotPrinterView,branches:branchesView,loyalty:loyaltyView,settings:settingsView};
+  const fn=(nav==='inventory')?invView:(map[nav]||posView);
+  try{ m.innerHTML=fn(); }catch(e){ console.error(e); m.innerHTML=`<section class="panel" style="padding:20px"><h2>Screen error</h2><p>${String(e.message||e)}</p></section>`; }
+  queueSave();
+};
+/* ---------- END CRITICAL FIX PATCH ---------- */
