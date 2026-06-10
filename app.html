@@ -826,8 +826,48 @@ function selectOrder(no){selNo=no;render();}
 function qty(no,id,d){const o=orders.find(x=>x.no===no);const it=o.items.find(i=>i.id===id);it.qty+=d;if(it.qty<=0)o.items=o.items.filter(i=>i.id!==id);render();}
 function setStage(no,s){orders.find(x=>x.no===no).stage=s;render();}
 function nextStage(no){const o=orders.find(x=>x.no===no);if(o.stage<3)o.stage++;toast("Stage: "+FLOW[o.stage]);render();}
-function settle(no){const o=orders.find(x=>x.no===no); if(!o)return; o.status="Paid"; const dt=new Date(); salesLog.push({key:dt.getFullYear()+"-"+(dt.getMonth()+1)+"-"+dt.getDate(), sales:totals(o).total}); toast(no+" settled"); render();}
-function complete(no){orders=orders.filter(x=>x.no!==no);selNo=orders[0]?orders[0].no:null;toast(no+" completed");render();}
+function activePaymentMethods(){return paymentMethods.filter(p=>p.active).map(p=>p.name);}
+function savePaidSale(o,method){
+  if(!o)return;
+  o.pay=method||'Cash';
+  o.status='Paid';
+  if(!o.saleSaved){
+    const dt=new Date();
+    salesLog.push({key:dt.getFullYear()+"-"+(dt.getMonth()+1)+"-"+dt.getDate(), sales:totals(o).total, method:o.pay});
+    o.saleSaved=true;
+  }
+}
+function showPaymentPopup(no,afterComplete=false){
+  const o=orders.find(x=>x.no===no); if(!o)return;
+  const methods=activePaymentMethods();
+  if(!methods.length){toast('No active payment method. Enable one from Cashier Features.');return;}
+  const t=totals(o);
+  const old=document.getElementById('paymentModal'); if(old)old.remove();
+  const html=`<div class="modal-overlay show" id="paymentModal"><div class="small-modal" style="max-width:560px">
+    <div class="m-head"><h3>Choose Payment Method</h3><button class="x" onclick="document.getElementById('paymentModal').remove()">×</button></div>
+    <div style="padding:18px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+        <div class="mini-card"><small>Order</small><b>${o.no}</b></div>
+        <div class="mini-card"><small>Total Payable</small><b>${rm(t.total)}</b></div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px">
+        ${methods.map(m=>`<button class="btn blue" style="padding:16px" onclick="confirmPayment('${o.no}','${m.replace(/'/g,\"\'\")}',${afterComplete})">${m}</button>`).join('')}
+      </div>
+      <p style="color:var(--muted);font-size:12px;margin-top:14px">Payment options come from Cashier Features. Disable/enable options there.</p>
+    </div>
+  </div></div>`;
+  document.body.insertAdjacentHTML('beforeend',html);
+}
+function confirmPayment(no,method,afterComplete=false){
+  const o=orders.find(x=>x.no===no); if(!o)return;
+  savePaidSale(o,method);
+  const pm=document.getElementById('paymentModal'); if(pm)pm.remove();
+  if(afterComplete){orders=orders.filter(x=>x.no!==no);selNo=orders[0]?orders[0].no:null;toast(no+' paid by '+method+' and completed');}
+  else{toast(no+' paid by '+method);}
+  render();
+}
+function settle(no){showPaymentPopup(no,false);}
+function complete(no){showPaymentPopup(no,true);}
 
 /* ---------- TABLES ---------- */
 function tablesView(){const occ=tables.filter(t=>t.occ).length;
@@ -1246,7 +1286,7 @@ function clearSupabaseSettings(){
 /* ---------- SMART POS ADVANCED RESTAURANT FEATURES ---------- */
 let tableStatuses = [{n:1,s:'available',guest:0},{n:2,s:'occupied',guest:3},{n:3,s:'available',guest:0},{n:4,s:'occupied',guest:5},{n:5,s:'reserved',guest:4},{n:6,s:'available',guest:0},{n:7,s:'cleaning',guest:0},{n:8,s:'occupied',guest:2},{n:9,s:'available',guest:0},{n:10,s:'reserved',guest:6},{n:11,s:'available',guest:0},{n:12,s:'available',guest:0}];
 let cashierShift={opening:500,cash:1280,card:740,qr:360,expense:120,closed:false};
-let paymentMethods=[{name:'Cash',active:true},{name:'Card',active:true},{name:'QR Pay',active:true},{name:'Split Payment',active:true},{name:'Credit/Due',active:false}];
+let paymentMethods=[{name:'Cash',active:true},{name:'TNG',active:true},{name:'Debit Card',active:true},{name:'QR',active:true},{name:'Card',active:false},{name:'Credit/Due',active:false}];
 let customerTags=['VIP','Birthday','Corporate','Credit Allowed','WhatsApp Receipt'];
 let modifiers={Spice:['Normal','Extra Spicy','Less Spicy'], Onion:['No Onion','Extra Onion'], Salt:['Less Salt','No Salt'], Addons:['Extra Cheese','Extra Sauce','Extra Raita']};
 let recipes={
