@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Smart POS Menu</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;font-family:Inter,system-ui,Arial,sans-serif}
+:root{--gold:#caa54e;--dark:#120f06;--bg:#f7f3ea;--card:#fff;--muted:#7a7263;--line:#e2d4b4;--green:#24a148;--red:#d64545}
+body{background:var(--bg);color:#241d0a;min-height:100vh;padding-bottom:92px}.top{position:sticky;top:0;z-index:10;background:#fffdf7;border-bottom:1px solid var(--line);padding:14px 16px;display:flex;justify-content:space-between;align-items:center}.brand{font-weight:900;color:#8a6d1a;font-size:18px}.table{background:linear-gradient(135deg,#b8912f,#e3c466,#caa54e);padding:8px 13px;border-radius:99px;font-weight:900}.wrap{max-width:980px;margin:0 auto;padding:18px 14px}.hero{background:#fff;border:1px solid var(--line);border-radius:18px;padding:18px;margin-bottom:14px;box-shadow:0 8px 22px rgba(0,0,0,.04)}.hero h1{font-family:Georgia,serif;color:#8a6d1a;margin-bottom:4px}.hero p{color:var(--muted)}.cats{display:flex;gap:8px;overflow:auto;padding:8px 0 14px;position:sticky;top:61px;background:var(--bg);z-index:8}.chip{border:0;border-radius:99px;padding:9px 15px;background:#eee7d8;color:#685f4e;font-weight:900;white-space:nowrap}.chip.active{background:var(--gold);color:#241d0a}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px}.item{background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:0 8px 20px rgba(0,0,0,.035)}.img{height:118px;background:#eee7d8}.img img{width:100%;height:100%;object-fit:cover}.body{padding:11px}.name{font-weight:900;margin-bottom:4px}.cat{font-size:12px;color:var(--muted)}.price{font-weight:900;color:#8a6d1a;margin:8px 0}.add{width:100%;border:0;background:var(--green);color:#fff;padding:9px;border-radius:9px;font-weight:900}.cartbar{position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid var(--line);padding:12px 14px;box-shadow:0 -8px 24px rgba(0,0,0,.08);z-index:20}.cartin{max-width:980px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:12px}.cartbtn{background:var(--dark);color:#f0d97a;border:0;border-radius:12px;padding:12px 18px;font-weight:900}.drawer{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;z-index:30;align-items:flex-end}.drawer.show{display:flex}.sheet{background:#fff;width:100%;max-height:88vh;overflow:auto;border-radius:20px 20px 0 0;padding:18px}.sheetin{max-width:720px;margin:0 auto}.line{display:grid;grid-template-columns:1fr auto;gap:10px;border-bottom:1px solid #eee;padding:12px 0}.qty{display:flex;align-items:center;gap:8px}.qty button{width:28px;height:28px;border:1px solid var(--line);background:#fff;border-radius:8px;font-weight:900}.total{display:flex;justify-content:space-between;font-size:22px;font-weight:900;margin:16px 0;color:#8a6d1a}.input{width:100%;padding:12px;border:1px solid var(--line);border-radius:10px;margin:8px 0 12px;font:inherit}.place{width:100%;border:0;background:var(--green);color:#fff;border-radius:12px;padding:14px;font-weight:900;font-size:16px}.close{border:0;background:#eee7d8;border-radius:10px;padding:10px 13px;font-weight:900}.empty{text-align:center;color:var(--muted);padding:30px}.success{background:#e9f8ef;border:1px solid #bde8ca;color:#166534;border-radius:12px;padding:12px;margin:12px 0;display:none}.err{background:#fff0f0;border:1px solid #ffc9c9;color:#b42323;border-radius:12px;padding:12px;margin:12px 0;display:none}
+</style>
+</head>
+<body>
+<div class="top"><div class="brand" id="brand">Smart POS</div><div class="table" id="tableBadge">Table</div></div>
+<div class="wrap">
+  <div class="hero"><h1>Menu</h1><p>Select items and place your table order.</p></div>
+  <div class="cats" id="cats"></div>
+  <div class="grid" id="grid"></div>
+</div>
+<div class="cartbar"><div class="cartin"><div><b id="cartCount">0 items</b><br><span id="cartTotal" style="color:var(--muted)">RM 0.00</span></div><button class="cartbtn" onclick="openCart()">View Cart</button></div></div>
+<div class="drawer" id="drawer"><div class="sheet"><div class="sheetin"><div style="display:flex;justify-content:space-between;align-items:center"><h2>Your Order</h2><button class="close" onclick="closeCart()">Close</button></div><div id="success" class="success"></div><div id="err" class="err"></div><div id="cartLines"></div><label style="font-weight:900;color:var(--muted);font-size:12px">Special note</label><textarea id="note" class="input" placeholder="No onion, extra spicy..." style="min-height:80px"></textarea><div class="total"><span>Total</span><span id="sheetTotal">RM 0.00</span></div><button class="place" onclick="placeOrder()">Place Order</button></div></div></div>
+<script>
+const SUPABASE_URL='https://xhvuyjrulhppicxwdtxq.supabase.co';
+const SUPABASE_KEY='sb_publishable_Fngj-vd-XZZjKimf92c9YA_EfIiYOY-';
+const db=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+const rm=n=>'RM '+Number(n||0).toFixed(2);
+const uid=()=>"#"+Math.random().toString(36).slice(2,8).toUpperCase();
+const params=new URLSearchParams(location.search);
+const table=(params.get('table')||'T01').replace(/^T/i,'').padStart(2,'0');
+document.getElementById('tableBadge').textContent='Table T'+table;
+let state=null, MENU=[], cat='All', cart=[];
+const fallbackMenu=[
+{id:1,name:'Chicken Seekh Kabab 2pc',price:15,cat:'Kababs',img:'assets/menu/chicken-seekh-kabab.png'},
+{id:2,name:'Beef Seekh Kabab 2pc',price:17,cat:'Kababs',img:'assets/menu/beef-seekh-kabab.png'},
+{id:3,name:'Chicken Tikka',price:16,cat:'Kababs',img:'assets/menu/chicken-tikka.png'},
+{id:4,name:'Mutton Chops',price:25,cat:'Kababs',img:'assets/menu/mutton-chops.png'},
+{id:5,name:'Chicken Biryani',price:15,cat:'Rice',img:'assets/menu/chicken-biryani.png'},
+{id:6,name:'Mutton Biryani',price:20,cat:'Rice',img:'assets/menu/mutton-biryani.png'},
+{id:7,name:'Chicken Achari New',price:15,cat:'Curries',img:'assets/menu/chicken-achari.png'},
+{id:8,name:'Plain Naan',price:3,cat:'Breads',img:'assets/menu/plain-naan.png'},
+{id:9,name:'Garlic Naan',price:5,cat:'Breads',img:'assets/menu/garlic-naan.png'},
+{id:10,name:'Roghni Naan',price:4,cat:'Breads',img:'assets/menu/roghni-naan.png'},
+{id:11,name:'Chicken Karahi',price:35,cat:'Curries',img:'assets/menu/chicken-karahi.png'},
+{id:12,name:'Daal Makhani',price:14,cat:'Curries',img:'assets/menu/daal-makhani.png'},
+{id:13,name:'Mango Lassi',price:7,cat:'Drinks',img:'assets/menu/mango-lassi.png'},
+{id:14,name:'Soft Drink',price:5,cat:'Drinks',img:'assets/menu/soft-drink.png'},
+{id:15,name:'Fresh Juice',price:9,cat:'Drinks',img:'assets/menu/fresh-juice.png'}];
+function stationOf(i){const c=(i.cat||'').toLowerCase(); if(c.includes('bread')||c.includes('naan'))return 'Tandoor'; if(c.includes('kabab')||c.includes('tikka')||c.includes('chops'))return 'BBQ'; if(c.includes('drink')||c.includes('lassi')||c.includes('juice'))return 'Drinks'; return 'Main Kitchen';}
+async function loadState(){
+  const {data,error}=await db.from('pos_data').select('value').eq('app','stonixra_pos').eq('key','state').maybeSingle();
+  if(error){console.error(error); state={}; MENU=fallbackMenu;}
+  else{state=data?.value||{}; MENU=Array.isArray(state.MENU)&&state.MENU.length?state.MENU:fallbackMenu;}
+  document.getElementById('brand').textContent=state.restaurantName||'Smart POS';
+  renderCats();renderGrid();renderCart();
+}
+function cats(){return ['All',...new Set(MENU.map(m=>m.cat||'Other'))];}
+function renderCats(){document.getElementById('cats').innerHTML=cats().map(c=>`<button class="chip ${cat===c?'active':''}" onclick="cat='${c}';renderCats();renderGrid()">${c}</button>`).join('')}
+function renderGrid(){const list=MENU.filter(m=>cat==='All'||m.cat===cat);document.getElementById('grid').innerHTML=list.map(m=>`<div class="item"><div class="img">${m.img?`<img src="${m.img}">`:''}</div><div class="body"><div class="name">${m.name}</div><div class="cat">${m.cat||'Other'}</div><div class="price">${rm(m.price)}</div><button class="add" onclick="add(${m.id})">Add</button></div></div>`).join('')}
+function add(id){const m=MENU.find(x=>String(x.id)===String(id));if(!m)return;const e=cart.find(x=>String(x.id)===String(id));if(e)e.qty++;else cart.push({id:m.id,name:m.name,price:Number(m.price||0),qty:1,cat:m.cat,img:m.img});renderCart();}
+function chg(id,d){const e=cart.find(x=>String(x.id)===String(id));if(!e)return;e.qty+=d;if(e.qty<=0)cart=cart.filter(x=>String(x.id)!==String(id));renderCart();}
+function total(){return cart.reduce((s,i)=>s+i.price*i.qty,0)}
+function renderCart(){document.getElementById('cartCount').textContent=cart.reduce((s,i)=>s+i.qty,0)+' items';document.getElementById('cartTotal').textContent=rm(total());document.getElementById('sheetTotal').textContent=rm(total());document.getElementById('cartLines').innerHTML=cart.length?cart.map(i=>`<div class="line"><div><b>${i.name}</b><br><small>${rm(i.price)} each</small></div><div class="qty"><button onclick="chg(${i.id},-1)">−</button><b>${i.qty}</b><button onclick="chg(${i.id},1)">+</button></div></div>`).join(''):'<div class="empty">Cart is empty</div>'}
+function openCart(){document.getElementById('drawer').classList.add('show');renderCart();}
+function closeCart(){document.getElementById('drawer').classList.remove('show')}
+async function placeOrder(){
+  document.getElementById('success').style.display='none';document.getElementById('err').style.display='none';
+  if(!cart.length){document.getElementById('err').textContent='Please add items first.';document.getElementById('err').style.display='block';return;}
+  const {data,error}=await db.from('pos_data').select('value').eq('app','stonixra_pos').eq('key','state').maybeSingle();
+  if(error){document.getElementById('err').textContent='Connection error. Please call waiter.';document.getElementById('err').style.display='block';return;}
+  const s=data?.value||state||{}; s.orders=Array.isArray(s.orders)?s.orders:[]; s.seq=Number(s.seq||1001);
+  const order={no:'#'+s.seq++,inv:uid(),type:'dine',table:table,status:'Unpaid',stage:0,age:'QR order',source:'QR',createdAt:new Date().toISOString(),note:document.getElementById('note').value||'',items:cart.map(i=>({...i,station:stationOf(i)}))};
+  s.orders.unshift(order); s.selNo=order.no;
+  const {error:saveErr}=await db.from('pos_data').upsert({app:'stonixra_pos',key:'state',value:s,updated_at:new Date().toISOString()},{onConflict:'app,key'});
+  if(saveErr){document.getElementById('err').textContent='Order could not be sent. Please call waiter.';document.getElementById('err').style.display='block';return;}
+  cart=[];document.getElementById('note').value='';renderCart();document.getElementById('success').textContent='Order sent successfully: '+order.no;document.getElementById('success').style.display='block';
+}
+loadState();
+</script>
+</body>
+</html>

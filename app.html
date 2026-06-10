@@ -663,13 +663,13 @@ const uid=()=>"#"+Math.random().toString(36).slice(2,8).toUpperCase();
 const cats=()=>["All",...new Set(MENU.map(m=>m.cat))];
 
 const NAV=[
-  {g:"Orders & Dining",items:[{k:"pos",l:"Orders Dashboard",badge:3},{k:"waiter",l:"Waiter Order Screen"},{k:"quickpos",l:"Quick POS Billing"},{k:"tables",l:"Tables"},{k:"bookings",l:"Table Bookings"},{k:"service",l:"Table Service"}]},
+  {g:"Orders & Dining",items:[{k:"pos",l:"Orders Dashboard",badge:3},{k:"waiter",l:"Waiter Order Screen"},{k:"quickpos",l:"Quick POS Billing"},{k:"tables",l:"Tables"},{k:"bookings",l:"Table Bookings"}]},
   {g:"Reports & Analytics",items:[{k:"reports",l:"Reports"},{k:"closing",l:"Daily Closing"},{k:"analytics",l:"Restaurant Analytics"}]},
   {g:"Menu & Marketing",items:[{k:"menu",l:"Menu & Dishes"},{k:"recipes",l:"Recipe Auto Stock"},{k:"qr",l:"QR Table Ordering"},{k:"promotions",l:"Promotions"}]},
   {g:"Management",items:[{k:"staff",l:"Staff Center"},{k:"roles",l:"Roles & Permissions"},{k:"cashier",l:"Cashier Features"},{k:"customers",l:"Customer Features"},{k:"inventory",l:"Inventory"},{k:"expenses",l:"Expenses"},{k:"barcode",l:"Barcode Scanner"},{k:"kotprinter",l:"Auto KOT Printer"},{k:"branches",l:"Multi Branch"},{k:"loyalty",l:"Loyalty Points"},{k:"settings",l:"Settings"}]},
 ];
 const ROLE_NAV={
-  waiter:["waiter","tables","service","bookings"],
+  waiter:["waiter","tables","bookings"],
   kitchen:["pos"],
   tandoor:["pos"],
   cashier:null
@@ -688,12 +688,12 @@ let expenses=[];
 let promos=[];
 let customers=[];
 let branches=[];
-const PERMISSION_OPTIONS=["Full access","Orders Dashboard","Create Orders","Edit Orders","Settle Bills","Split Payment","Discount","Refund / Void","Print Receipts","Past Orders","Tables","Table Bookings","Table Service","Quick POS Billing","Reports","Restaurant Analytics","Daily Closing","Expenses","Menu & Dishes","Recipe Auto Stock","QR Table Ordering","Promotions","Staff Center","Roles & Permissions","Cashier Features","Customer Features","Inventory","Barcode Scanner","Auto KOT Printer","Multi Branch","Loyalty Points","Settings"];
+const PERMISSION_OPTIONS=["Full access","Orders Dashboard","Create Orders","Edit Orders","Settle Bills","Split Payment","Discount","Refund / Void","Print Receipts","Past Orders","Tables","Table Bookings","Quick POS Billing","Reports","Restaurant Analytics","Daily Closing","Expenses","Menu & Dishes","Recipe Auto Stock","QR Table Ordering","Promotions","Staff Center","Roles & Permissions","Cashier Features","Customer Features","Inventory","Barcode Scanner","Auto KOT Printer","Multi Branch","Loyalty Points","Settings"];
 let rolePerms=[
   {role:"Admin",perms:[...PERMISSION_OPTIONS]},
   {role:"Manager",perms:PERMISSION_OPTIONS.filter(p=>!["Settings"].includes(p))},
-  {role:"Cashier",perms:["Orders Dashboard","Settle Bills","Split Payment","Discount","Refund / Void","Print Receipts","Past Orders","Table Service","Reports","Daily Closing","Expenses","Menu & Dishes","Cashier Features","Customer Features"]},
-  {role:"Waiter",perms:["Create Orders","Table Service","Tables","Table Bookings"]}
+  {role:"Cashier",perms:["Orders Dashboard","Settle Bills","Split Payment","Discount","Refund / Void","Print Receipts","Past Orders","Reports","Daily Closing","Expenses","Menu & Dishes","Cashier Features","Customer Features"]},
+  {role:"Waiter",perms:["Create Orders","Tables","Table Bookings"]}
 ];
 let openRoleIndex=null;
 let barcodeText="";
@@ -969,21 +969,27 @@ function bookingsView(){
 }
 /* ---------- SERVICE ---------- */
 function serviceView(){
-  return head("Table Service","Active service requests")+panelTable(["Table","Request","Waiter","Status"],serviceReqs.map((s,i)=>[`<b>${s.t}</b>`,s.r,s.w,`<span class="pill ${s.s==='Done'?'green-pill':'red-pill'}" onclick="serviceReqs[${i}].s='Done';render()" style="cursor:pointer">${s.s}</span>`]));
+  return head("Active service requests")+panelTable(["Table","Request","Waiter","Status"],serviceReqs.map((s,i)=>[`<b>${s.t}</b>`,s.r,s.w,`<span class="pill ${s.s==='Done'?'green-pill':'red-pill'}" onclick="serviceReqs[${i}].s='Done';render()" style="cursor:pointer">${s.s}</span>`]));
 }
 /* ---------- STAFF ---------- */
 function staffView(){
   return head("Staff Center","Attendance, roles and permissions",'<button class="btn light" onclick="addStaff()">+ Add Staff</button><button class="btn dark" onclick="downloadCSV(\'staff\',[\'User\',\'Designation\',\'Location\',\'Status\',\'ClockIn\'],staff.map(s=>[s.u,s.d,s.l,s.s,s.ci]))">Download Data</button>')+panelTable(["User","Designation","Location","Status","Clock-In"],staff.map((s,i)=>[`<b>${s.u}</b>`,s.d,s.l,`<span class="pill ${s.s==='Absent'?'red-pill':'green-pill'}" onclick="toggleStaff(${i})" style="cursor:pointer">${s.s}</span>`,s.ci]));
 }
 /* ---------- INVENTORY ---------- */
+function invAlert(i){return Number(i.alert ?? i.low ?? 8)}
+function invStatus(q,alert=8){q=Number(q)||0;alert=Number(alert)||0;return q<=0?'out':q<=alert?'low':'good'}
 function invView(){
+  inventory.forEach(i=>{i.alert=invAlert(i);i.s=invStatus(i.q,i.alert)});
   const out=inventory.filter(i=>i.s==="out").length,low=inventory.filter(i=>i.s==="low").length,good=inventory.filter(i=>i.s==="good").length;
-  return head("Inventory","Ingredient stock and alerts",'<button class="btn blue" onclick="addIngredient()">+ Add Ingredient</button>')+
+  const alerts=inventory.filter(i=>i.s!=="good");
+  return head("Inventory","Ingredient stock and low-stock alerts",'<button class="btn blue" onclick="addIngredient()">+ Add Ingredient</button>')+
   `<div class="stats" style="grid-template-columns:repeat(3,1fr)"><div class="stat"><small>Out of Stock</small><h2 style="color:var(--red)">${out}</h2></div><div class="stat"><small>Low Stock</small><h2 style="color:var(--orange)">${low}</h2></div><div class="stat"><small>In Stock</small><h2 style="color:var(--green)">${good}</h2></div></div>`+
-  panelTable(["Ingredient","Stock","Unit","Status","Adjust"],inventory.map((i,idx)=>[`<b>${i.i}</b>`,i.q,i.u,pill(i.s==='good'?'In Stock':i.s==='low'?'Low':'Out',i.s==='good'?'green':'red'),`<button class="step" onclick="adjStock(${idx},-1)">−</button> <button class="step" onclick="adjStock(${idx},1)">+</button>`]));
+  (alerts.length?`<div class="panel" style="padding:14px;margin-bottom:14px;border-left:5px solid var(--orange)"><b>⚠ Low Stock Warning</b><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">${alerts.map(i=>`<span class="pill ${i.s==='out'?'red-pill':'blue-pill'}">${i.i}: ${i.q}${i.u} / alert ${invAlert(i)}${i.u}</span>`).join('')}</div></div>`:'')+
+  panelTable(["Ingredient","Stock","Unit","Low Warning","Status","Adjust","Action"],inventory.map((i,idx)=>[`<b>${i.i}</b>`,i.q,i.u,`≤ ${invAlert(i)} ${i.u}`,pill(i.s==='good'?'In Stock':i.s==='low'?'Low Stock':'Out of Stock',i.s==='good'?'green':'red'),`<button class="step" onclick="adjStock(${idx},-1)">−</button> <button class="step" onclick="adjStock(${idx},1)">+</button>`,`<button class="chip" onclick="editIngredient(${idx})">Edit</button>`]));
 }
-function adjStock(idx,d){const it=inventory[idx];it.q=Math.max(0,it.q+d);it.s=it.q===0?'out':it.q<=8?'low':'good';render();}
-function addIngredient(){openFormModal('Add Ingredient',[{name:'name',label:'Ingredient name'},{name:'q',label:'Quantity',type:'number',value:10},{name:'u',label:'Unit',value:'kg',placeholder:'kg / L / pcs'}],d=>{if(!d.name)return;const q=parseFloat(d.q)||0;const u=d.u||'kg';inventory.push({i:d.name,q,u,s:q===0?'out':q<=8?'low':'good'});toast(d.name+' added');});}
+function adjStock(idx,d){const it=inventory[idx];it.q=Math.max(0,Number(it.q||0)+d);it.alert=invAlert(it);it.s=invStatus(it.q,it.alert);render();}
+function addIngredient(){openFormModal('Add Ingredient',[{name:'name',label:'Ingredient name'},{name:'q',label:'Quantity',type:'number',value:10},{name:'u',label:'Unit',value:'kg',placeholder:'kg / L / pcs'},{name:'alert',label:'Low stock warning at',type:'number',value:5,placeholder:'Example: 5'}],d=>{if(!d.name)return;const q=parseFloat(d.q)||0;const u=d.u||'kg';const alert=parseFloat(d.alert)||0;inventory.push({i:d.name,q,u,alert,s:invStatus(q,alert)});toast(d.name+' added');});}
+function editIngredient(idx){const it=inventory[idx];openFormModal('Edit Ingredient',[{name:'name',label:'Ingredient name',value:it.i},{name:'q',label:'Quantity',type:'number',value:it.q},{name:'u',label:'Unit',value:it.u||'kg'},{name:'alert',label:'Low stock warning at',type:'number',value:invAlert(it)}],d=>{if(!d.name)return;it.i=d.name;it.q=parseFloat(d.q)||0;it.u=d.u||'kg';it.alert=parseFloat(d.alert)||0;it.s=invStatus(it.q,it.alert);toast('Ingredient updated');});}
 
 /* ---------- EXPENSES ---------- */
 const EXPENSE_CATS=['Staff Meal','Gas','Supplies','Repair','Utilities','Rent','Delivery','Other'];
@@ -1266,7 +1272,40 @@ function kdsView(){
 }
 
 /* ---------- QR MENU ---------- */
-function qrView(){const url=location.href.split('#')[0].replace('app.html','index.html')+'?menu=qr';return head("QR Menu","Show QR on tables for digital menu and ordering",'<button class="btn blue" onclick="window.print()">Print QR Sheet</button>')+`<div class="panel" style="padding:22px;display:grid;grid-template-columns:260px 1fr;gap:22px;align-items:center"><div style="width:220px;height:220px;border:12px solid #111;display:grid;place-items:center;font-weight:900;text-align:center;background:repeating-linear-gradient(45deg,#fff,#fff 8px,#111 8px,#111 12px)"><div style="background:white;padding:14px;border-radius:8px">QR MENU<br><small>${restaurantName}</small></div></div><div><h2>Table QR Ordering</h2><p style="color:var(--muted);margin:10px 0">Use this placeholder for table QR menu. When hosted, connect it with customer ordering page.</p><input class="input" value="${url}" readonly><br><br><button class="btn green" onclick="toast('QR copied')">Copy Menu Link</button></div></div>`;}
+let qrTable="01";
+function menuBaseUrl(){return location.href.split('?')[0].replace('app.html','menu.html');}
+function qrMenuLink(t=qrTable){return menuBaseUrl()+"?table=T"+String(t).replace(/^T/i,'').padStart(2,'0');}
+function copyQRLink(){navigator.clipboard?.writeText(qrMenuLink()).then(()=>toast('QR menu link copied')).catch(()=>toast('Copy not available'));}
+function printQRSheet(){
+  const link=qrMenuLink();
+  const qr='https://api.qrserver.com/v1/create-qr-code/?size=320x320&data='+encodeURIComponent(link);
+  const w=window.open('','_blank');
+  w.document.write(`<!doctype html><title>Table QR T${qrTable}</title><body style="font-family:Arial;text-align:center;padding:35px"><h1>${restaurantName}</h1><h2>Table T${qrTable}</h2><img src="${qr}" style="width:320px;height:320px"><p>Scan to view menu and place order</p><p style="font-size:12px">${link}</p><script>window.print()<\/script></body>`);
+  w.document.close();
+}
+function qrView(){
+  const tablesList=safeTableList().map(t=>String(t.n).padStart(2,'0'));
+  const link=qrMenuLink();
+  const qr='https://api.qrserver.com/v1/create-qr-code/?size=260x260&data='+encodeURIComponent(link);
+  return head("QR Table Ordering","Generate real table QR codes. Customer scans, adds items to cart and places order directly into POS.",'<button class="btn blue" onclick="printQRSheet()">Print QR Sheet</button>')+
+  `<div class="panel" style="padding:22px;display:grid;grid-template-columns:300px 1fr;gap:26px;align-items:center">
+    <div style="text-align:center"><img src="${qr}" style="width:260px;height:260px;border:12px solid #fff;box-shadow:0 10px 25px rgba(0,0,0,.12);background:white"><div style="margin-top:10px;font-weight:900;color:var(--blue)">Table T${qrTable}</div></div>
+    <div>
+      <h2>Customer QR Ordering</h2>
+      <p style="color:var(--muted);margin:10px 0">Select a table, print the QR, and place it on that table. Orders submitted from mobile will appear in Orders Dashboard as unpaid dine-in orders.</p>
+      <label style="font-size:12px;font-weight:900;color:var(--muted);text-transform:uppercase">Select Table</label>
+      <select class="input" style="max-width:220px;margin:6px 0 12px" onchange="qrTable=this.value;render()">${tablesList.map(t=>`<option value="${t}" ${t===qrTable?'selected':''}>Table T${t}</option>`).join('')}</select>
+      <label style="font-size:12px;font-weight:900;color:var(--muted);text-transform:uppercase">Menu Link</label>
+      <input class="input" value="${link}" readonly>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px">
+        <button class="btn green" onclick="copyQRLink()">Copy Link</button>
+        <a class="btn light" href="${link}" target="_blank">Open Customer Menu</a>
+        <button class="btn dark" onclick="printQRSheet()">Print QR</button>
+      </div>
+    </div>
+  </div>
+  <div class="panel" style="padding:18px;margin-top:16px"><h3>How it works</h3><p style="color:var(--muted);margin-top:8px">Customer scans QR → menu opens → customer adds items → places order → order appears in POS dashboard.</p></div>`;
+}
 
 /* ---------- BARCODE SCANNER ---------- */
 function barcodeView(){return head("Barcode Scanner","Keyboard/USB scanner ready. Scan or type product code and add item to cart")+`<div class="panel" style="padding:22px;max-width:740px"><label style="font-weight:900">Scan Code</label><input class="input" autofocus placeholder="Scan barcode here" value="${barcodeText}" oninput="barcodeText=this.value"><div style="margin-top:12px;display:flex;gap:8px"><button class="btn blue" onclick="barcodeAdd()">Add Scanned Item</button><button class="btn light" onclick="barcodeText='';render()">Clear</button></div><p style="color:var(--muted);font-size:13px;margin-top:12px">Demo logic: code 1001 adds Chicken Biryani, 1002 adds BBQ, 1003 adds Drink.</p></div>`;}
@@ -1449,6 +1488,15 @@ async function loadCloud(){
   if(data?.value){applyState(data.value);renderNav();render();toast("Supabase data loaded");}
   else{toast("No cloud data found");}
 }
+async function loadCloudSilent(){
+  if(!dbReady||!db)return;
+  const {data,error}=await db.from("pos_data").select("value").eq("app","stonixra_pos").eq("key","state").maybeSingle();
+  if(error||!data?.value)return;
+  const before=JSON.stringify((orders||[]).map(o=>o.no));
+  applyState(data.value);
+  const after=JSON.stringify((orders||[]).map(o=>o.no));
+  if(before!==after){renderNav();render();}
+}
 async function saveCloud(show=true){
   if(!initSupabase()){if(show)toast("Add Supabase URL and Anon Key first");return;}
   const payload={app:"stonixra_pos",key:"state",value:appState(),updated_at:new Date().toISOString()};
@@ -1526,11 +1574,53 @@ function modifiersView(){const cats=Object.keys(modifiers); return head('Kitchen
 `<div class="grid3">${cats.map(c=>`<section class="panel" style="padding:16px"><h3>${c}</h3><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">${modifiers[c].map(x=>`<span class="pill blue-pill">${x}</span>`).join('')}</div><button class="btn light" style="margin-top:14px" onclick="addModifier('${c}')">+ Add ${c}</button></section>`).join('')}</div>
 <section class="panel" style="padding:16px;margin-top:16px"><h3>Example KOT Note</h3><p style="color:var(--muted);margin-top:8px">Chicken Biryani — Extra Spicy, No Onion, Less Salt</p></section>`;}
 function addModifier(c){openFormModal('Add '+c+' Modifier',[{name:'v',label:'Option name'}],d=>{if(d.v){modifiers[c].push(d.v);toast('Modifier added');}});}
-function recipesView(){return head('Recipe & Auto Stock Deduction','When item is sold, ingredient stock is deducted automatically.')+
-`<div class="panel" style="padding:16px;margin-bottom:16px"><button class="btn blue" onclick="deductRecipeDemo()">Test Auto Deduct From Selected Order</button></div>`+
-panelTable(['Menu Item','Recipe Ingredients','Action'],MENU.filter(m=>recipes[m.id]).map(m=>[`<b>${m.name}</b>`,recipes[m.id].map(r=>`${r.i}: ${r.q}${r.u}`).join('<br>'),`<button class="chip" onclick="editRecipe(${m.id})">Edit Recipe</button>`]));}
-function editRecipe(id){toast('Recipe editor ready for '+(MENU.find(m=>m.id===id)?.name||'item'));}
-function deductRecipeDemo(){const o=orders.find(x=>x.no===selNo)||orders[0]; if(!o){toast('No order selected');return;} o.items.forEach(it=>{(recipes[it.id]||[]).forEach(r=>{const inv=inventory.find(x=>x.i===r.i); if(inv){inv.q=Math.max(0,Number(inv.q)-(r.q*it.qty)); inv.s=inv.q===0?'out':inv.q<=8?'low':'good';}})}); toast('Stock auto deducted for '+o.no); go('inventory');}
+function recipesView(){
+  const rows=MENU.map(m=>{
+    const list=recipes[m.id]||[];
+    const ing=list.length?list.map(r=>`${r.i}: ${r.q}${r.u}`).join('<br>'):'<span style="color:var(--muted)">No recipe added</span>';
+    const action=list.length
+      ? `<button class="chip" onclick="editRecipe(${m.id})">Edit</button> <button class="chip" style="color:var(--red)" onclick="deleteRecipe(${m.id})">Delete</button>`
+      : `<button class="chip" onclick="editRecipe(${m.id})">Add</button>`;
+    return [`<b>${m.name}</b>`, ing, action];
+  });
+  return head('Recipe & Auto Stock Deduction','Add or edit item recipes. When an item is sold, ingredient stock is deducted automatically.',
+    '<button class="btn blue" onclick="addRecipe()">+ Add Recipe</button>')+
+    panelTable(['Menu Item','Recipe Ingredients','Action'],rows);
+}
+function recipeText(list){return (list||[]).map(r=>`${r.i}: ${r.q}${r.u}`).join('\n');}
+function parseRecipeText(txt){
+  return String(txt||'').split(/\n+/).map(x=>x.trim()).filter(Boolean).map(line=>{
+    const m=line.match(/^(.+?)\s*:\s*([0-9.]+)\s*([a-zA-Z]+|kg|g|L|ml|pcs)?$/);
+    if(m)return {i:m[1].trim(),q:parseFloat(m[2])||0,u:m[3]||''};
+    return {i:line,q:0,u:''};
+  });
+}
+function addRecipe(){
+  openFormModal('Add Recipe',[
+    {name:'item',label:'Menu Item',type:'select',value:MENU[0]?.id||'',options:MENU.map(m=>m.id+' | '+m.name)},
+    {name:'items',label:'Recipe Ingredients',type:'textarea',placeholder:'Example:\nBasmati Rice: 0.25kg\nChicken: 0.2kg\nYogurt: 0.05L'}
+  ],d=>{
+    const id=parseInt(String(d.item).split('|')[0]);
+    const arr=parseRecipeText(d.items);
+    if(!id||!arr.length){toast('Select item and add ingredients');return;}
+    recipes[id]=arr; toast('Recipe saved');
+  });
+}
+function editRecipe(id){
+  const item=MENU.find(m=>m.id===id); if(!item)return;
+  openFormModal((recipes[id]?'Edit Recipe — ':'Add Recipe — ')+item.name,[
+    {name:'items',label:'Recipe Ingredients',type:'textarea',value:recipeText(recipes[id]),placeholder:'Ingredient: quantity unit'}
+  ],d=>{
+    const arr=parseRecipeText(d.items);
+    if(!arr.length){toast('Add at least one ingredient');return;}
+    recipes[id]=arr; toast('Recipe saved');
+  });
+}
+function deleteRecipe(id){
+  const item=MENU.find(m=>m.id===id);
+  if(confirm('Delete recipe for '+(item?.name||'this item')+'?')){delete recipes[id];toast('Recipe deleted');render();}
+}
+function deductRecipeDemo(){const o=orders.find(x=>x.no===selNo)||orders[0]; if(!o){toast('No order selected');return;} o.items.forEach(it=>{(recipes[it.id]||[]).forEach(r=>{const inv=inventory.find(x=>x.i===r.i); if(inv){inv.q=Math.max(0,Number(inv.q)-(r.q*it.qty)); inv.alert=invAlert(inv); inv.s=invStatus(inv.q,inv.alert);}})}); toast('Stock auto deducted for '+o.no); go('inventory');}
 function closingAutoData(){
   const key=todayKey();
   const paid=salesLog.filter(r=>normalizeSaleKey(r.key)===key);
@@ -1590,7 +1680,7 @@ function toggleTheme(){
 
 applyThemePref();
 renderNav();render();hydrated=true;
-if(dbReady){loadCloud();}
+if(dbReady){loadCloud(); setInterval(loadCloudSilent,6000);}
 if(role==="waiter"){document.getElementById("roleCashier").classList.remove("active");document.getElementById("roleWaiter").classList.add("active");}
 if(role==="kitchen"){document.getElementById("roleCashier").classList.remove("active");document.getElementById("roleKitchen")?.classList.add("active");}
 if(role==="tandoor"){document.getElementById("roleCashier").classList.remove("active");document.getElementById("roleTandoor")?.classList.add("active");}
