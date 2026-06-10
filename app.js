@@ -1,638 +1,4 @@
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Smart POS</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Playfair+Display:wght@600;700;800;900&display=swap" rel="stylesheet">
-<style>
-  *{margin:0;padding:0;box-sizing:border-box;font-family:Inter,system-ui,Arial,sans-serif}
-  :root{
-    --bg:#0c0c11;--card:#16161d;--text:#f1ece1;--muted:#9a948a;--line:#2b2b35;
-    --blue:#d4af37;--blue-d:#b8912f;--dark:#0a0a0e;--green:#3ec46b;--red:#ff6b6b;
-    --orange:#ff7a2f;--yellow:#ffbe3d;
-  }
-  body{background:var(--bg);color:var(--text)}
-  /* premium top bar */
-  .topbar{height:60px;background:linear-gradient(90deg,#b8912f,#d4af37,#e7c873);color:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 22px;position:sticky;top:0;z-index:20}
-  .topbar .tb-left{display:flex;align-items:center;gap:12px;font-weight:800;font-size:16px}
-  .tb-badge{width:34px;height:34px;background:rgba(255,255,255,.18);border-radius:9px;display:grid;place-items:center;font-weight:900}
-  .role-switch{display:flex;background:rgba(255,255,255,.16);border-radius:9px;padding:3px;gap:3px}
-  .role-switch button{border:0;background:0;color:#efe2bf;padding:7px 16px;border-radius:7px;font-weight:800;font-size:13px;cursor:pointer}
-  .role-switch button.active{background:#16161d;color:var(--blue)}
-  .app{display:flex;min-height:calc(100vh - 60px)}
-  /* sidebar */
-  .sidebar{width:255px;background:#16161d;border-right:1px solid #2b2b35;display:flex;flex-direction:column;position:fixed;top:60px;bottom:0;left:0;z-index:10}
-  .brand{height:70px;display:flex;align-items:center;gap:12px;padding:0 16px;border-bottom:1px solid var(--line)}
-  .brand-icon{width:38px;height:38px;border-radius:11px;background:var(--blue);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:900;overflow:hidden}
-  .brand-icon img{width:100%;height:100%;object-fit:cover}
-  .brand h3{font-size:15px}
-  .nav{padding:10px;overflow:auto;flex:1}
-  .group-title{font-size:11px;font-weight:900;letter-spacing:.06em;text-transform:uppercase;color:#8d877c;padding:14px 10px 6px}
-  .nav-link{display:flex;align-items:center;gap:10px;padding:11px 12px;color:#3c4656;border-radius:9px;font-size:13.5px;cursor:pointer;margin:2px 0;font-weight:600}
-  .nav-link .ic{width:7px;height:7px;border-radius:50%;background:#55514a;flex:none}
-  .nav-link:hover{background:#1e1e27}
-  .nav-link.active{background:#1e1e27;color:var(--blue);font-weight:800}
-  .nav-link.active .ic{background:var(--blue)}
-  .nav-link .badge{margin-left:auto;background:var(--blue);color:#fff;font-size:10px;font-weight:800;border-radius:99px;padding:2px 8px}
-  .bottom-actions{padding:14px;border-top:1px solid var(--line)}
-  .logout{background:#241416;color:#ff3b3b;border:1px solid #3a2424;border-radius:9px;padding:12px;width:100%;font-size:13.5px;font-weight:700;cursor:pointer}
-  /* main */
-  .main{margin-left:255px;width:calc(100% - 255px);padding:22px}
-  .top-head{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:18px;gap:14px;flex-wrap:wrap}
-  .top-head h1{font-size:28px;margin-bottom:4px}.top-head p{color:#6b7280;font-size:13px}
-  .head-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-  .btn{border:0;border-radius:9px;padding:11px 17px;font-weight:800;cursor:pointer;font-size:13px}
-  .btn.dark{background:#0a0a0e;color:#fff}.btn.blue{background:var(--blue);color:#fff}
-  .btn.green{background:var(--green);color:#fff}.btn.light{background:#16161d;border:1px solid #2b2b35;color:#374151}
-  .btn:active{transform:scale(.97)}
-  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px}
-  .stat{background:#16161d;border:1px solid var(--line);border-radius:13px;padding:17px;box-shadow:0 4px 14px rgba(20,30,60,.04)}
-  .stat small{color:#8691a5;font-weight:800;text-transform:uppercase;font-size:11px;letter-spacing:.04em}
-  .stat h2{font-size:27px;margin-top:7px}
-  .stat .trend{font-size:11px;font-weight:700;margin-top:4px}
-  .mini-card{border:1px solid var(--line);border-radius:10px;padding:12px;background:#1e1e27}.mini-card small{display:block;color:var(--muted);font-weight:900;text-transform:uppercase;font-size:10px}.mini-card b{font-size:18px}
-  .up{color:var(--green)}.down{color:var(--red)}
-  .pos-grid{display:grid;grid-template-columns:340px 1fr 410px;gap:16px;align-items:start}
-  .panel{background:#16161d;border:1px solid var(--line);border-radius:13px;box-shadow:0 4px 14px rgba(20,30,60,.04);overflow:hidden}
-  .panel-head{padding:15px 16px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}
-  .panel-head h3{font-size:16px}
-  .tabs{display:flex;gap:18px;border-bottom:1px solid var(--line);padding:0 16px}
-  .tab{padding:13px 0;font-size:12px;font-weight:900;color:#7f8ca3;cursor:pointer;border-bottom:3px solid transparent;letter-spacing:.03em}
-  .tab.active{color:var(--blue);border-color:var(--blue)}
-  .filters{padding:13px;display:grid;gap:9px}
-  .input{width:100%;padding:11px 12px;border:1px solid #2b2b35;border-radius:9px;background:#16161d;font-size:13px;outline:0}
-  .input:focus{border-color:var(--blue)}
-  .order-list{padding:0 13px 13px;display:grid;gap:9px;max-height:560px;overflow:auto}
-  .order-card{border:1px solid var(--line);border-radius:11px;padding:14px;cursor:pointer;background:#16161d;transition:.12s}
-  .order-card:hover{box-shadow:0 6px 18px rgba(20,30,60,.08)}
-  .order-card.active{background:var(--blue-d);color:#fff;border-color:var(--blue-d)}
-  .order-card .row{display:flex;justify-content:space-between;align-items:center}
-  .dot{width:10px;height:10px;border-radius:50%;background:#2ec84d;display:inline-block;margin-right:8px}
-  .order-title{font-size:17px;font-weight:900}
-  .order-meta{display:flex;gap:14px;margin-top:12px;font-size:11.5px;color:#6b7280}
-  .order-card.active .order-meta{color:#efe2bf}
-  .pill{padding:5px 11px;border-radius:999px;font-size:11px;font-weight:900;background:#2a2417;color:#8a5600;white-space:nowrap}
-  .red-pill{background:#241416;color:#b42323}
-  .green-pill{background:#dcfce7;color:#15803d}
-  .blue-pill{background:#2a2417;color:#8a6d1a}
-  .detail-body{padding:17px}
-  .order-info{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:15px}
-  .info-box{background:#1e1e27;border:1px solid var(--line);border-radius:10px;padding:12px}
-  .info-box small{color:#8792a5;font-size:10.5px;font-weight:800;text-transform:uppercase}
-  .info-box h4{font-size:16px;margin-top:6px}
-  .status-text{color:var(--blue)}
-  .items-table{width:100%;border-collapse:collapse;margin-top:6px}
-  .items-table th,.items-table td{padding:12px;border-bottom:1px solid var(--line);text-align:left;font-size:13.5px}
-  .items-table th{background:#1e1e27;color:#8792a5;font-weight:800;font-size:11px;text-transform:uppercase}
-  .food-line{display:flex;align-items:center;gap:11px;font-weight:700}
-  .food-img{width:42px;height:42px;border-radius:9px;background:#23232e;object-fit:cover;display:grid;place-items:center;color:#55514a;overflow:hidden;flex:none}
-  .food-img img{width:100%;height:100%;object-fit:cover}
-  .qty-controls{display:flex;align-items:center;gap:7px}
-  .qty-controls button{width:28px;height:28px;border:1px solid #2b2b35;background:#16161d;border-radius:50%;cursor:pointer;font-weight:900;font-size:14px}
-  .status-flow{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin-top:18px}
-  .flow-box{padding:12px;border-radius:10px;text-align:center;background:#1e1e27;color:#64748b;font-weight:800;font-size:12px;cursor:pointer}
-  .flow-box.active{background:#2a2417;color:var(--blue)}
-  .flow-box.done{background:#dcfce7;color:#15803d}
-  .bill-body{padding:17px}
-  .bill-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:13px}
-  .bill-top h2{font-size:22px}
-  .invoice{color:var(--blue);font-weight:900;font-size:12.5px}
-  .bill-list{display:grid;gap:11px;margin:14px 0;max-height:230px;overflow:auto}
-  .bill-item{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;border-bottom:1px solid var(--line);padding-bottom:11px}
-  .bill-item b{font-size:14px}.bill-item small{color:#6b7280}
-  .bill-qty{font-weight:900}
-  .summary{border-top:1px solid var(--line);padding-top:12px}
-  .sum-row{display:flex;justify-content:space-between;padding:7px 0;color:#4b5563;font-size:13.5px}
-  .total{font-size:21px;font-weight:900;color:#e7c873}
-  .action-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:14px}
-  .action-grid .btn{padding:13px}
-  /* generic table screens */
-  .menu-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:14px}
-  .dish{background:#16161d;border:1px solid var(--line);border-radius:13px;overflow:hidden}
-  .dish .img{height:115px;background:#23232e;display:grid;place-items:center;color:#55514a;font-size:28px;cursor:pointer;position:relative;overflow:hidden}
-  .dish .img img{width:100%;height:100%;object-fit:cover}
-  .dish .img .up{position:absolute;bottom:8px;right:8px;background:rgba(0,0,0,.6);color:#fff;font-size:10px;padding:4px 8px;border-radius:7px}
-  .dish .b{padding:12px}.dish .dn{font-weight:700;font-size:13px}.dish .dc{font-size:11px;color:var(--muted);margin-top:2px}.dish .dp{margin-top:8px;font-weight:900;color:var(--blue)}
-  .form{background:#16161d;border:1px solid var(--line);border-radius:13px;padding:22px;max-width:520px}
-  .field{margin-bottom:15px}.field label{display:block;font-size:12px;font-weight:800;color:var(--muted);margin-bottom:6px}
-  .field input{width:100%;padding:11px 13px;border:1px solid #2b2b35;border-radius:9px;font-size:13px;outline:0}
-  .field input:focus{border-color:var(--blue)}
-  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
-  .tbig{padding:20px;text-align:center;border-radius:13px;font-weight:900;border:2px solid var(--line);background:#16161d;cursor:pointer}
-  .tbig.occ{background:#241416;border-color:rgba(255,107,107,.4);color:var(--red)}
-  .tbig.free{background:#142418;border-color:rgba(62,196,107,.4);color:var(--green)}
-  .tbig small{display:block;font-weight:600;color:var(--muted);margin-top:5px;font-size:11px}
-  .screen{display:none}.screen.show{display:block}
-  /* modal */
-  .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:99;padding:18px}
-  .modal-overlay.show{display:flex}
-  .modal{background:#16161d;border-radius:16px;width:100%;max-width:940px;height:86vh;display:flex;overflow:hidden}
-  .m-menu{flex:1;display:flex;flex-direction:column}
-  .m-head{display:flex;align-items:center;justify-content:space-between;padding:15px 18px;border-bottom:1px solid var(--line)}
-  .m-head h3{font-size:17px}
-  .x{border:0;background:0;font-size:24px;color:var(--muted);cursor:pointer;line-height:1}
-  .m-search{padding:13px 15px;border-bottom:1px solid var(--line)}
-  .ssearch{display:flex;align-items:center;gap:8px;background:#1e1e27;border-radius:9px;padding:10px 12px}
-  .ssearch input{border:0;background:0;outline:0;flex:1;font-size:13px}
-  .m-cats{display:flex;flex-wrap:wrap;gap:6px;margin-top:11px}
-  .chip{border:0;border-radius:99px;padding:7px 14px;font-size:12px;font-weight:800;background:#23232e;color:var(--muted);cursor:pointer}
-  .chip.active{background:var(--blue);color:#fff}
-  .mgrid{flex:1;overflow:auto;padding:14px;display:grid;grid-template-columns:repeat(3,1fr);gap:10px;align-content:start}
-  .mitem{border:1px solid var(--line);border-radius:12px;cursor:pointer;background:#16161d;overflow:hidden}
-  .mitem:hover{border-color:var(--blue);box-shadow:0 4px 12px rgba(20,30,60,.08)}
-  .mitem:active{transform:scale(.96)}
-  .mitem .mimg{height:66px;background:#23232e;display:grid;place-items:center;color:#55514a;overflow:hidden}
-  .mitem .mimg img{width:100%;height:100%;object-fit:cover}
-  .mitem .mb{padding:9px}.mitem .mn{font-size:11.5px;font-weight:700;line-height:1.25}.mitem .mp{margin-top:5px;font-weight:900;color:var(--blue)}
-  .m-cart{width:320px;border-left:1px solid var(--line);background:#1e1e27;display:flex;flex-direction:column}
-  .m-types{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:14px}
-  .m-type{border:0;border-radius:9px;padding:11px 4px;background:#16161d;color:var(--muted);font-weight:800;font-size:11px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:5px;border:1px solid var(--line)}
-  .m-type.active{background:var(--blue);color:#fff;border-color:var(--blue)}
-  .m-table{margin:0 14px 9px;padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:#16161d;outline:0;font-size:13px}
-  .m-lines{flex:1;overflow:auto;padding:0 14px}
-  .m-line{display:flex;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid var(--line)}
-  .m-line .ml-n{flex:1;font-size:12px;font-weight:700}
-  .step{width:27px;height:27px;border:1px solid var(--line);border-radius:8px;background:#16161d;cursor:pointer;font-weight:900;font-size:14px}
-  .m-line .ml-q{width:22px;text-align:center;font-weight:900}
-  .m-line .ml-p{width:62px;text-align:right;font-size:12px;font-weight:900}
-  .m-tot{border-top:1px solid var(--line);padding:14px 16px;font-size:13.5px}
-  .m-tot .l{display:flex;justify-content:space-between;color:var(--muted);padding:2px 0}
-  .m-tot .t{display:flex;justify-content:space-between;font-weight:900;padding-top:5px;font-size:16px}
-  .m-tot .t span:last-child{color:var(--blue)}
-  .m-create{margin:14px;padding:14px;border:0;border-radius:10px;background:var(--blue);color:#fff;font-weight:900;font-size:14px;cursor:pointer}
-  .m-create:disabled{opacity:.45}
-  .empty{padding:40px 0;text-align:center;color:#a8b0bd;font-size:13px}
 
-  .small-modal{background:#16161d;border-radius:16px;width:100%;max-width:520px;max-height:88vh;overflow:auto;box-shadow:0 18px 45px rgba(0,0,0,.18)}
-  .form-grid{padding:18px;display:grid;gap:13px}
-  .form-grid label{display:block;font-size:12px;font-weight:900;color:var(--muted);text-transform:uppercase;margin-bottom:6px}
-  .form-grid input,.form-grid select,.form-grid textarea{width:100%;padding:12px 13px;border:1px solid #2b2b35;border-radius:10px;background:#16161d;font:inherit;font-size:13px;outline:0}
-  .form-grid textarea{min-height:90px;resize:vertical}
-  .form-grid input:focus,.form-grid select:focus,.form-grid textarea:focus{border-color:var(--blue)}
-  .readonly-field{background:#1e1e27!important;color:#64748b!important;cursor:not-allowed}
-  .admin-lock{display:flex;align-items:center;gap:8px;background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;padding:10px 12px;border-radius:10px;font-size:12px;font-weight:800;margin-top:12px}
-
-  .inline-editor{background:#1e1e27;border:1px solid var(--line);border-radius:12px;padding:14px;display:grid;gap:10px;max-width:620px}
-  .inline-editor label{font-size:12px;font-weight:900;color:var(--muted);text-transform:uppercase}
-  .inline-editor textarea{width:100%;min-height:82px;border:1px solid #2b2b35;border-radius:9px;padding:12px;font:inherit;font-size:13px;resize:vertical;outline:0;background:#16161d}
-  .inline-editor textarea:focus{border-color:var(--blue)}
-  .inline-actions{display:flex;gap:8px;justify-content:flex-end}
-  .role-edit-row td{background:#1e1e27!important}
-  .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:#161b26;color:#fff;padding:12px 22px;border-radius:99px;font-weight:700;font-size:13px;display:none;align-items:center;gap:9px;z-index:120;box-shadow:0 12px 30px rgba(0,0,0,.3)}
-  .toast.show{display:flex}
-  .toast .d{width:8px;height:8px;border-radius:99px;background:#4ade80}
-  /* ===== PREMIUM POLISH & ANIMATIONS ===== */
-  @keyframes riseIn{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
-  @keyframes fadeIn{from{opacity:0}to{opacity:1}}
-  @keyframes popIn{0%{opacity:0;transform:scale(.92) translateY(20px)}100%{opacity:1;transform:scale(1) translateY(0)}}
-  @keyframes toastUp{from{opacity:0;transform:translate(-50%,20px)}to{opacity:1;transform:translate(-50%,0)}}
-  @keyframes shimmer{0%{background-position:-400px 0}100%{background-position:400px 0}}
-  @keyframes pulseDot{0%,100%{box-shadow:0 0 0 0 rgba(46,200,77,.5)}70%{box-shadow:0 0 0 6px rgba(46,200,77,0)}}
-  /* content fades up each time a tab renders */
-  #main>*{animation:riseIn .34s cubic-bezier(.22,1,.36,1) both}
-  #main>*:nth-child(2){animation-delay:.05s}
-  #main>*:nth-child(3){animation-delay:.10s}
-  #main>*:nth-child(4){animation-delay:.14s}
-  /* stat cards subtle lift */
-  .stat{transition:transform .18s ease,box-shadow .18s ease}
-  .stat:hover{transform:translateY(-3px);box-shadow:0 14px 30px -14px rgba(20,30,60,.25)}
-  /* order cards */
-  .order-card{transition:transform .14s ease,box-shadow .14s ease,background .14s ease}
-  .order-card:hover{transform:translateY(-2px)}
-  .order-card .dot{animation:pulseDot 2s infinite}
-  /* nav links */
-  .nav-link{transition:background .15s ease,color .15s ease,padding-left .15s ease}
-  .nav-link:hover{padding-left:16px}
-  /* buttons: smooth press + hover glow */
-  .btn,.m-create,.chip,.flow-box,.role-switch button,.logout{transition:transform .12s ease,box-shadow .18s ease,background .18s ease,color .15s ease}
-  .btn.blue:hover{box-shadow:0 10px 22px -10px rgba(212,175,55,.7)}
-  .btn.green:hover{box-shadow:0 10px 22px -10px rgba(31,143,58,.6)}
-  .btn:hover{transform:translateY(-1px)}
-  .btn:active{transform:translateY(1px) scale(.98)}
-  /* modal animations */
-  .modal-overlay{animation:fadeIn .2s ease}
-  .modal-overlay.show .modal{animation:popIn .32s cubic-bezier(.22,1,.36,1)}
-  /* menu dish cards */
-  .dish{transition:transform .16s ease,box-shadow .16s ease}
-  .dish:hover{transform:translateY(-4px);box-shadow:0 18px 38px -18px rgba(20,30,60,.3)}
-  .dish .img img,.food-img img{transition:transform .25s ease}
-  .dish:hover .img img{transform:scale(1.06)}
-  /* menu item tiles in order modal */
-  .mitem{transition:transform .12s ease,box-shadow .16s ease,border-color .16s ease}
-  .mitem:hover{transform:translateY(-2px)}
-  /* table cards */
-  .tbig{transition:transform .14s ease,box-shadow .16s ease}
-  .tbig:hover{transform:translateY(-3px);box-shadow:0 12px 26px -14px rgba(20,30,60,.25)}
-  /* flow steps + chips */
-  .flow-box:hover{transform:translateY(-2px)}
-  .chip:hover{transform:translateY(-1px)}
-  /* table rows hover */
-  .items-table tbody tr{transition:background .12s ease}
-  /* toast */
-  .toast.show{animation:toastUp .3s cubic-bezier(.22,1,.36,1)}
-  /* role switch active pop */
-  .role-switch button.active{animation:popIn .25s ease}
-  /* respect reduced motion */
-  @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
-
-  @media(max-width:980px){.sidebar{position:relative;top:0;width:100%;height:auto}.app{display:block}.main{margin-left:0;width:100%}.pos-grid,.stats,.order-info{grid-template-columns:1fr}.bill-panel{grid-column:auto}}
-
-
-  /* ===== DARK LUXURY GOLD THEME ===== */
-  body{background:#0c0c11;color:#f1ece1}
-  .topbar{background:linear-gradient(90deg,#141019,#1c1810);border-bottom:1px solid #2b2b35}
-  .topbar .tb-left{color:#e7c873}
-  .tb-badge{background:rgba(212,175,55,.16);color:#d4af37}
-  .role-switch{background:rgba(255,255,255,.06)}
-  .role-switch button{color:#cdbf9a}
-  .role-switch button.active{background:linear-gradient(135deg,#b8912f,#e7c873);color:#15130c}
-  .sidebar{background:#16161d;border-right:1px solid #2b2b35}
-  .brand{border-bottom:1px solid #2b2b35}
-  .brand-icon{background:linear-gradient(135deg,#b8912f,#e7c873);color:#15130c}
-  .brand h3{color:#f1ece1}
-  .group-title{color:#6f6a60}
-  .nav-link{color:#bbb4a6}
-  .nav-link:hover{background:#1e1e27}
-  .nav-link.active{background:rgba(212,175,55,.12);color:#d4af37}
-  .nav-link .ic{background:#55514a}
-  .nav-link.active .ic{background:#d4af37}
-  .nav-link .badge{background:#d4af37;color:#15130c}
-  .bottom-actions{border-top:1px solid #2b2b35}
-  .logout{background:rgba(255,107,107,.10);color:#ff8080;border:1px solid rgba(255,107,107,.28)}
-  .top-head h1{color:#f1ece1}.top-head p{color:#9a948a}
-  .btn.dark{background:#0a0a0e;color:#e7c873;border:1px solid #2b2b35}
-  .btn.blue{background:linear-gradient(135deg,#b8912f,#e7c873);color:#15130c}
-  .btn.green{background:#2f9e58;color:#fff}
-  .btn.light{background:#1e1e27;border:1px solid #2b2b35;color:#f1ece1}
-  .stat{background:#16161d;border:1px solid #2b2b35;box-shadow:0 4px 18px rgba(0,0,0,.35)}
-  .stat small{color:#8d877c} .stat h2{color:#f1ece1}
-  .mini-card{background:#1e1e27;border:1px solid #2b2b35}
-  .panel{background:#16161d;border:1px solid #2b2b35;box-shadow:0 4px 18px rgba(0,0,0,.35)}
-  .panel-head{border-bottom:1px solid #2b2b35} .panel-head h3{color:#f1ece1}
-  .tabs{border-bottom:1px solid #2b2b35} .tab{color:#8d877c} .tab.active{color:#d4af37;border-color:#d4af37}
-  .input{background:#23232e;border:1px solid #2b2b35;color:#f1ece1} .input:focus{border-color:#d4af37}
-  .input::placeholder{color:#6f6a60}
-  .order-list{}
-  .order-card{background:#1e1e27;border:1px solid #2b2b35}
-  .order-card:hover{box-shadow:0 8px 22px rgba(0,0,0,.5)}
-  .order-card.active{background:linear-gradient(135deg,#b8912f,#e7c873);color:#15130c;border-color:#e7c873}
-  .order-card.active .order-meta{color:#3a3220}
-  .order-meta{color:#9a948a}
-  .info-box{background:#1e1e27;border:1px solid #2b2b35} .info-box small{color:#8d877c} .info-box h4{color:#f1ece1}
-  .status-text{color:#d4af37}
-  .items-table th{background:#1e1e27;color:#8d877c}
-  .items-table th,.items-table td{border-bottom:1px solid #24242d}
-  .items-table td{color:#f1ece1}
-  .food-img{background:#23232e;color:#55514a}
-  .qty-controls button{background:#23232e;border:1px solid #2b2b35;color:#f1ece1}
-  .flow-box{background:#1e1e27;color:#8d877c}
-  .flow-box.active{background:rgba(212,175,55,.16);color:#d4af37}
-  .flow-box.done{background:rgba(62,196,107,.16);color:#5fd587}
-  .invoice{color:#d4af37}
-  .bill-top h2{color:#f1ece1}
-  .bill-item{border-bottom:1px solid #24242d} .bill-item b{color:#f1ece1} .bill-item small{color:#9a948a}
-  .summary{border-top:1px solid #2b2b35} .sum-row{color:#b8b1a4} .total{color:#e7c873!important} .total span{color:#e7c873}
-  .pill{background:rgba(212,175,55,.16);color:#e7c873}
-  .red-pill{background:rgba(255,107,107,.16);color:#ff8a8a}
-  .green-pill{background:rgba(62,196,107,.16);color:#5fd587}
-  .blue-pill{background:rgba(212,175,55,.16);color:#e7c873}
-  .dish{background:#16161d;border:1px solid #2b2b35}
-  .dish .img{background:#23232e;color:#55514a}
-  .dish .dn{color:#f1ece1} .dish .dc{color:#9a948a} .dish .dp{color:#e7c873}
-  .form{background:#16161d;border:1px solid #2b2b35}
-  .field label{color:#8d877c}
-  .field input{background:#23232e;border:1px solid #2b2b35;color:#f1ece1}
-  .tbig{background:#16161d;border:2px solid #2b2b35;color:#f1ece1}
-  .tbig.occ{background:rgba(255,107,107,.10);border-color:rgba(255,107,107,.4);color:#ff8a8a}
-  .tbig.free{background:rgba(62,196,107,.10);border-color:rgba(62,196,107,.4);color:#5fd587}
-  .tbig small{color:#9a948a}
-  .modal{background:#16161d}
-  .m-head{border-bottom:1px solid #2b2b35} .m-head h3{color:#f1ece1}
-  .x{color:#9a948a}
-  .m-search{border-bottom:1px solid #24242d}
-  .ssearch{background:#23232e} .ssearch input{color:#f1ece1}
-  .chip{background:#23232e;color:#9a948a} .chip.active{background:linear-gradient(135deg,#b8912f,#e7c873);color:#15130c}
-  .mitem{background:#16161d;border:1px solid #2b2b35} .mitem:hover{border-color:#d4af37}
-  .mitem .mimg{background:#23232e;color:#55514a}
-  .mitem .mn{color:#f1ece1} .mitem .mp{color:#e7c873}
-  .m-cart{background:#1e1e27;border-left:1px solid #2b2b35}
-  .m-type{background:#16161d;color:#9a948a;border:1px solid #2b2b35} .m-type.active{background:linear-gradient(135deg,#b8912f,#e7c873);color:#15130c;border-color:#e7c873}
-  .m-table{background:#23232e;border:1px solid #2b2b35;color:#f1ece1}
-  .m-lines{} .m-line{border-bottom:1px solid #2b2b35} .m-line .ml-n{color:#f1ece1}
-  .step{background:#23232e;border:1px solid #2b2b35;color:#f1ece1}
-  .m-tot{border-top:1px solid #2b2b35} .m-tot .l{color:#9a948a} .m-tot .t{color:#f1ece1} .m-tot .t span:last-child{color:#e7c873}
-  .m-create{background:linear-gradient(135deg,#b8912f,#e7c873);color:#15130c}
-  .small-modal{background:#16161d;box-shadow:0 18px 50px rgba(0,0,0,.6)}
-  .form-grid label{color:#8d877c}
-  .form-grid input,.form-grid select,.form-grid textarea{background:#23232e;border:1px solid #2b2b35;color:#f1ece1}
-  .empty{color:#6f6a60}
-  .btn.blue:hover{box-shadow:0 10px 24px -8px rgba(212,175,55,.55)}
-  select option{background:#16161d;color:#f1ece1}
-  ::-webkit-scrollbar{width:10px;height:10px}::-webkit-scrollbar-thumb{background:#33333f;border-radius:8px}::-webkit-scrollbar-track{background:#0c0c11}
-
-
-  /* ===== FINAL POLISH: contrast + premium ===== */
-  .topbar{background:linear-gradient(100deg,#16131b,#241c0e)!important;border-bottom:1px solid rgba(212,175,55,.35)!important;box-shadow:0 2px 18px rgba(0,0,0,.5)}
-  .topbar .tb-left{color:#f3e9c9!important}
-  .tb-badge{background:rgba(212,175,55,.18)!important;color:#e7c873!important}
-  .role-switch{background:rgba(255,255,255,.08)!important;border:1px solid rgba(212,175,55,.18)}
-  .role-switch button{color:#e8dcb8!important}
-  .role-switch button.active{background:linear-gradient(135deg,#b8912f,#e7c873)!important;color:#15130c!important;box-shadow:0 2px 8px rgba(212,175,55,.4)}
-  .sidebar{background:#121218!important;border-right:1px solid #26262f!important}
-  .group-title{color:#8a8275!important}
-  .nav-link{color:#d7cfbe!important}
-  .nav-link .ic{background:#6b6557!important}
-  .nav-link:hover{background:#1d1d26!important;color:#f3ecda!important}
-  .nav-link.active{background:linear-gradient(90deg,rgba(212,175,55,.18),rgba(212,175,55,.05))!important;color:#f0d97a!important;box-shadow:inset 3px 0 0 #d4af37}
-  .nav-link.active .ic{background:#e7c873!important}
-  .nav-link .badge{background:linear-gradient(135deg,#b8912f,#e7c873)!important;color:#15130c!important}
-  .top-head h1{color:#f5efe2!important} .top-head p{color:#9a948a!important}
-  .stat{background:linear-gradient(160deg,#1a1a22,#16161d)!important;border:1px solid #2a2a34!important}
-  .stat h2{color:#f5efe2!important}
-  .panel{background:#17171e!important;border:1px solid #2a2a34!important}
-  .panel-head h3{color:#f5efe2!important}
-  .order-card.active{box-shadow:0 8px 24px -6px rgba(212,175,55,.45)!important}
-  .btn.blue{background:linear-gradient(135deg,#b8912f,#e7c873)!important;color:#15130c!important}
-  .btn.green{background:linear-gradient(135deg,#1f8f3a,#36b358)!important;color:#fff!important}
-  .chip{background:#23232e!important;color:#cfc6b4!important}
-  .chip:hover{color:#f0d97a!important}
-  .items-table th{background:#1c1c24!important;color:#9a948a!important}
-  .items-table td{color:#ece6da!important}
-  .form{background:#17171e!important;border:1px solid #2a2a34!important}
-  .field input,.input{color:#f1ece1!important}
-  .logout{background:rgba(255,107,107,.10)!important;color:#ff8a8a!important;border:1px solid rgba(255,107,107,.3)!important}
-  .brand h3{color:#f3ecda!important}
-
-
-  /* ============ LUXURY BLACK-GOLD THEME (final) ============ */
-  :root{--blue:#d4af37;--blue-d:#a67c1a;--green:#2fae5b;--red:#e0584f}
-  body{background:#0a0908!important;color:#f3ead2!important}
-  ::-webkit-scrollbar{width:10px;height:10px}
-  ::-webkit-scrollbar-thumb{background:linear-gradient(180deg,#a67c1a,#d4af37);border-radius:8px}
-  ::-webkit-scrollbar-track{background:#0a0908}
-  /* topbar */
-  .topbar{background:#070605!important;border-bottom:1px solid rgba(212,175,55,.4)!important;box-shadow:0 2px 24px rgba(0,0,0,.7)}
-  .topbar .tb-left{color:#f0d97a!important;letter-spacing:.3px}
-  .tb-badge{background:linear-gradient(135deg,#a67c1a,#d4af37,#f5e08a,#c9a227)!important;color:#120f06!important}
-  .role-switch{background:rgba(212,175,55,.06)!important;border:1px solid rgba(212,175,55,.22)}
-  .role-switch button{color:#cdbf95!important}
-  .role-switch button.active{background:linear-gradient(135deg,#a67c1a,#d4af37,#f5e08a,#c9a227)!important;color:#120f06!important;box-shadow:0 2px 10px rgba(212,175,55,.45)}
-  /* sidebar */
-  .sidebar{background:#0d0c0a!important;border-right:1px solid rgba(212,175,55,.16)!important}
-  .brand{border-bottom:1px solid rgba(212,175,55,.16)!important}
-  .brand-icon{background:linear-gradient(135deg,#a67c1a,#d4af37,#f5e08a,#c9a227)!important;color:#120f06!important;box-shadow:0 2px 10px rgba(212,175,55,.35)}
-  .brand h3{color:#f0d97a!important;letter-spacing:.3px}
-  .group-title{color:#7d7460!important}
-  .nav-link{color:#cfc4a8!important}
-  .nav-link .ic{background:#5f5949!important}
-  .nav-link:hover{background:rgba(212,175,55,.07)!important;color:#f3ead2!important}
-  .nav-link.active{background:linear-gradient(90deg,rgba(212,175,55,.20),transparent)!important;color:#f0d97a!important;box-shadow:inset 3px 0 0 #d4af37}
-  .nav-link.active .ic{background:#d4af37!important}
-  .nav-link .badge{background:linear-gradient(135deg,#a67c1a,#d4af37,#f5e08a,#c9a227)!important;color:#120f06!important}
-  .bottom-actions{border-top:1px solid rgba(212,175,55,.16)!important}
-  .logout{background:rgba(224,88,79,.10)!important;color:#ff8d85!important;border:1px solid rgba(224,88,79,.3)!important}
-  /* headings */
-  .top-head h1{color:#f0d97a!important;letter-spacing:.3px} .top-head p{color:#9c9176!important}
-  /* cards & panels */
-  .stat{background:linear-gradient(160deg,#17140f,#100e0b)!important;border:1px solid rgba(212,175,55,.18)!important;box-shadow:0 6px 22px rgba(0,0,0,.5)}
-  .stat small{color:#8c836c!important} .stat h2{color:#f3ead2!important}
-  .mini-card{background:#1a1713!important;border:1px solid rgba(212,175,55,.16)!important}
-  .panel{background:#100e0b!important;border:1px solid rgba(212,175,55,.16)!important;box-shadow:0 6px 22px rgba(0,0,0,.5)}
-  .panel-head{border-bottom:1px solid rgba(212,175,55,.16)!important} .panel-head h3{color:#f0d97a!important}
-  .tabs{border-bottom:1px solid rgba(212,175,55,.16)!important} .tab{color:#8c836c!important} .tab.active{color:#d4af37!important;border-color:#d4af37!important}
-  /* inputs */
-  .input,.field input,.form-grid input,.form-grid select,.form-grid textarea,.inline-editor textarea{background:#221d16!important;border:1px solid rgba(212,175,55,.18)!important;color:#f3ead2!important}
-  .input:focus,.field input:focus{border-color:#d4af37!important;box-shadow:0 0 0 3px rgba(212,175,55,.12)}
-  .input::placeholder{color:#6f6857!important}
-  /* orders */
-  .order-card{background:#131210!important;border:1px solid rgba(212,175,55,.16)!important}
-  .order-card:hover{box-shadow:0 8px 24px rgba(0,0,0,.6);border-color:rgba(212,175,55,.35)!important}
-  .order-card.active{background:linear-gradient(135deg,#a67c1a,#d4af37,#f5e08a,#c9a227)!important;color:#120f06!important;border-color:#f0d97a!important;box-shadow:0 8px 26px -6px rgba(212,175,55,.55)!important}
-  .order-card.active .order-meta,.order-card.active .order-title{color:#241d0a!important}
-  .order-meta{color:#9c9176!important}
-  .info-box{background:#1a1713!important;border:1px solid rgba(212,175,55,.16)!important} .info-box small{color:#8c836c!important} .info-box h4{color:#f3ead2!important}
-  .status-text{color:#d4af37!important}
-  .items-table th{background:#17140f!important;color:#8c836c!important;border-bottom:1px solid rgba(212,175,55,.16)!important}
-  .items-table td{color:#f3ead2!important;border-bottom:1px solid rgba(212,175,55,.10)!important}
-  .food-img{background:#221d16!important;color:#5f5949!important}
-  .qty-controls button,.step{background:#221d16!important;border:1px solid rgba(212,175,55,.16)!important;color:#f0d97a!important}
-  .flow-box{background:#1a1713!important;color:#8c836c!important}
-  .flow-box.active{background:rgba(212,175,55,.18)!important;color:#d4af37!important}
-  .flow-box.done{background:rgba(47,174,91,.16)!important;color:#54d27f!important}
-  /* bill */
-  .invoice{color:#d4af37!important} .bill-top h2{color:#f3ead2!important}
-  .bill-item{border-bottom:1px solid rgba(212,175,55,.10)!important} .bill-item b{color:#f3ead2!important} .bill-item small{color:#9c9176!important}
-  .summary{border-top:1px solid rgba(212,175,55,.16)!important} .sum-row{color:#b6ac92!important} .total,.total span{color:#f0d97a!important}
-  /* pills */
-  .pill{background:rgba(212,175,55,.16)!important;color:#f0d97a!important}
-  .red-pill{background:rgba(224,88,79,.16)!important;color:#ff9089!important}
-  .green-pill{background:rgba(47,174,91,.16)!important;color:#54d27f!important}
-  .blue-pill{background:rgba(212,175,55,.16)!important;color:#f0d97a!important}
-  /* dishes */
-  .dish{background:#131210!important;border:1px solid rgba(212,175,55,.16)!important}
-  .dish:hover{border-color:rgba(212,175,55,.4)!important;box-shadow:0 14px 34px -16px rgba(212,175,55,.4)!important}
-  .dish .img{background:#221d16!important;color:#5f5949!important}
-  .dish .dn,.dish h4{color:#f3ead2!important} .dish .dc,.dish p{color:#9c9176!important} .dish .dp,.dish b{color:#f0d97a!important}
-  /* forms */
-  .form{background:#100e0b!important;border:1px solid rgba(212,175,55,.16)!important}
-  .field label,.form-grid label{color:#8c836c!important}
-  /* tables grid */
-  .tbig{background:#131210!important;border:2px solid rgba(212,175,55,.16)!important;color:#f3ead2!important}
-  .tbig.occ{background:rgba(224,88,79,.10)!important;border-color:rgba(224,88,79,.4)!important;color:#ff9089!important}
-  .tbig.free{background:rgba(47,174,91,.10)!important;border-color:rgba(47,174,91,.4)!important;color:#54d27f!important}
-  .tbig small{color:#9c9176!important}
-  /* buttons */
-  .btn.blue,.m-create{background:linear-gradient(135deg,#a67c1a,#d4af37,#f5e08a,#c9a227)!important;color:#120f06!important;font-weight:900}
-  .btn.blue:hover{box-shadow:0 10px 26px -8px rgba(212,175,55,.6)!important}
-  .btn.dark{background:#070605!important;color:#f0d97a!important;border:1px solid rgba(212,175,55,.3)!important}
-  .btn.light{background:#1a1713!important;border:1px solid rgba(212,175,55,.16)!important;color:#f3ead2!important}
-  .btn.green{background:linear-gradient(135deg,#1f8f3a,#36b358)!important;color:#fff!important}
-  /* chips */
-  .chip{background:#221d16!important;color:#cfc4a8!important} .chip.active{background:linear-gradient(135deg,#a67c1a,#d4af37,#f5e08a,#c9a227)!important;color:#120f06!important}
-  .chip:hover{color:#f0d97a!important}
-  /* modals */
-  .modal,.small-modal{background:#100e0b!important;border:1px solid rgba(212,175,55,.2)!important}
-  .m-head{border-bottom:1px solid rgba(212,175,55,.16)!important} .m-head h3{color:#f0d97a!important}
-  .m-cart{background:#131210!important;border-left:1px solid rgba(212,175,55,.16)!important}
-  .m-type{background:#131210!important;color:#9c9176!important;border:1px solid rgba(212,175,55,.16)!important} .m-type.active{background:linear-gradient(135deg,#a67c1a,#d4af37,#f5e08a,#c9a227)!important;color:#120f06!important;border-color:#f0d97a!important}
-  .mitem{background:#131210!important;border:1px solid rgba(212,175,55,.16)!important} .mitem:hover{border-color:#d4af37!important}
-  .mitem .mimg{background:#221d16!important} .mitem .mn{color:#f3ead2!important} .mitem .mp{color:#f0d97a!important}
-  .m-table{background:#221d16!important;border:1px solid rgba(212,175,55,.16)!important;color:#f3ead2!important}
-  .m-line{border-bottom:1px solid rgba(212,175,55,.16)!important} .m-line .ml-n{color:#f3ead2!important}
-  .m-tot .l{color:#9c9176!important} .m-tot .t,.m-tot .t span:last-child{color:#f0d97a!important}
-  .ssearch{background:#221d16!important} .ssearch input{color:#f3ead2!important}
-  .inline-editor{background:#1a1713!important;border:1px solid rgba(212,175,55,.16)!important} .inline-editor label{color:#9c9176!important}
-  .role-edit-row td{background:#1a1713!important}
-  .empty{color:#6f6857!important}
-  select option{background:#131210;color:#f3ead2}
-
-
-  /* ===== LUXURY SERIF TYPOGRAPHY ===== */
-  .brand h3,.tb-left,.top-head h1,.panel-head h3,.order-title,.bill-top h2,.total,
-  .stat h2,.h2,.info-box h4,.dish .dn,.dish h4,.m-head h3,.d-head h2{font-family:'Playfair Display',Georgia,serif!important;letter-spacing:.2px}
-  .top-head h1{font-weight:800!important;font-size:30px!important}
-  .tb-left{font-weight:800!important;letter-spacing:.6px!important}
-  .brand h3{font-weight:800!important}
-  .total,.total span{font-weight:900!important}
-  /* refined champagne gold accents */
-  .tb-badge,.brand-icon,.role-switch button.active,.nav-link .badge,.btn.blue,.m-create,
-  .order-card.active,.m-type.active,.chip.active,.ms-top,.step .num,.logo .mark,.logo-mark,.price.pop .tag{background:linear-gradient(135deg,#9e7c2e,#e8cf8b,#caa54e,#f1dd9e)!important}
-  .topbar{background:#060504!important;border-bottom:1px solid rgba(212,175,55,.45)!important}
-  body{background:#080706!important}
-
-
-  /* ================= LIGHT LUXURY THEME (toggle) ================= */
-  body.light{background:#f7f3ea!important;color:#221d12!important}
-  body.light .topbar{background:#fffdf7!important;border-bottom:1px solid rgba(176,137,47,.28)!important;box-shadow:0 2px 14px rgba(0,0,0,.06)}
-  body.light .tb-left{color:#8a6d1a!important}
-  body.light .tb-badge{background:linear-gradient(135deg,#b8912f,#e3c466,#caa54e)!important;color:#241d0a!important}
-  body.light #themeBtn{background:rgba(176,137,47,.10)!important;color:#8a6d1a!important;border:1px solid rgba(176,137,47,.28)!important}
-  body.light .role-switch{background:#f1ead8!important;border:1px solid rgba(176,137,47,.28)!important}
-  body.light .role-switch button{color:#7a7263!important}
-  body.light .role-switch button.active{background:linear-gradient(135deg,#b8912f,#e3c466,#caa54e)!important;color:#241d0a!important}
-  body.light .sidebar{background:#fffdf7!important;border-right:1px solid rgba(176,137,47,.28)!important}
-  body.light .brand{border-bottom:1px solid rgba(176,137,47,.28)!important}
-  body.light .brand h3{color:#8a6d1a!important}
-  body.light .group-title{color:#a59a83!important}
-  body.light .nav-link{color:#5c5547!important}
-  body.light .nav-link .ic{background:#c7bda3!important}
-  body.light .nav-link:hover{background:rgba(176,137,47,.08)!important;color:#221d12!important}
-  body.light .nav-link.active{background:linear-gradient(90deg,rgba(176,137,47,.18),transparent)!important;color:#8a6d1a!important;box-shadow:inset 3px 0 0 #b8912f}
-  body.light .nav-link.active .ic{background:#b8912f!important}
-  body.light .top-head h1{color:#8a6d1a!important} body.light .top-head p{color:#7a7263!important}
-  body.light .stat{background:linear-gradient(160deg,#fff,#fbf7ee)!important;border:1px solid rgba(176,137,47,.28)!important;box-shadow:0 4px 16px rgba(0,0,0,.05)}
-  body.light .stat small{color:#a59a83!important} body.light .stat h2{color:#221d12!important}
-  body.light .panel{background:#fff!important;border:1px solid rgba(176,137,47,.28)!important;box-shadow:0 4px 16px rgba(0,0,0,.05)}
-  body.light .panel-head{border-bottom:1px solid rgba(176,137,47,.28)!important} body.light .panel-head h3{color:#8a6d1a!important}
-  body.light .tabs{border-bottom:1px solid rgba(176,137,47,.28)!important} body.light .tab{color:#a59a83!important} body.light .tab.active{color:#8a6d1a!important;border-color:#b8912f!important}
-  body.light .input,body.light .field input,body.light .form-grid input,body.light .form-grid select,body.light .form-grid textarea,body.light .inline-editor textarea{background:#fff!important;border:1px solid rgba(176,137,47,.28)!important;color:#221d12!important}
-  body.light .input::placeholder{color:#b3a98f!important}
-  body.light .order-card{background:#faf6ec!important;border:1px solid rgba(176,137,47,.28)!important}
-  body.light .order-card.active{background:linear-gradient(135deg,#b8912f,#e3c466,#caa54e)!important;color:#241d0a!important;border-color:#b8912f!important}
-  body.light .order-card.active .order-meta,body.light .order-card.active .order-title{color:#2a2208!important}
-  body.light .order-meta{color:#7a7263!important}
-  body.light .info-box{background:#faf6ec!important;border:1px solid rgba(176,137,47,.28)!important} body.light .info-box small{color:#a59a83!important} body.light .info-box h4{color:#221d12!important}
-  body.light .status-text{color:#8a6d1a!important}
-  body.light .items-table th{background:#faf6ec!important;color:#a59a83!important;border-bottom:1px solid rgba(176,137,47,.28)!important}
-  body.light .items-table td{color:#221d12!important;border-bottom:1px solid rgba(176,137,47,.14)!important}
-  body.light .food-img,body.light .dish .img,body.light .mitem .mimg{background:#f0eadc!important;color:#c7bda3!important}
-  body.light .qty-controls button,body.light .step{background:#fff!important;border:1px solid rgba(176,137,47,.28)!important;color:#8a6d1a!important}
-  body.light .flow-box{background:#faf6ec!important;color:#a59a83!important}
-  body.light .flow-box.active{background:rgba(176,137,47,.18)!important;color:#8a6d1a!important}
-  body.light .flow-box.done{background:rgba(47,174,91,.16)!important;color:#1f8f3a!important}
-  body.light .invoice{color:#8a6d1a!important} body.light .bill-top h2{color:#221d12!important}
-  body.light .bill-item b{color:#221d12!important} body.light .bill-item small{color:#7a7263!important}
-  body.light .summary{border-top:1px solid rgba(176,137,47,.28)!important} body.light .sum-row{color:#6d6555!important} body.light .total,body.light .total span{color:#8a6d1a!important}
-  body.light .pill,body.light .blue-pill{background:rgba(176,137,47,.16)!important;color:#8a6d1a!important}
-  body.light .red-pill{background:rgba(224,88,79,.14)!important;color:#c0392b!important}
-  body.light .green-pill{background:rgba(47,174,91,.16)!important;color:#1f8f3a!important}
-  body.light .dish{background:#fff!important;border:1px solid rgba(176,137,47,.28)!important}
-  body.light .dish .dn,body.light .dish h4{color:#221d12!important} body.light .dish .dc,body.light .dish p{color:#7a7263!important} body.light .dish .dp,body.light .dish b{color:#8a6d1a!important}
-  body.light .form{background:#fff!important;border:1px solid rgba(176,137,47,.28)!important}
-  body.light .field label,body.light .form-grid label{color:#a59a83!important}
-  body.light .tbig{background:#fff!important;border:2px solid rgba(176,137,47,.28)!important;color:#221d12!important}
-  body.light .tbig.occ{background:rgba(224,88,79,.08)!important;border-color:rgba(224,88,79,.35)!important;color:#c0392b!important}
-  body.light .tbig.free{background:rgba(47,174,91,.08)!important;border-color:rgba(47,174,91,.35)!important;color:#1f8f3a!important}
-  body.light .tbig small{color:#7a7263!important}
-  body.light .btn.blue,body.light .m-create{background:linear-gradient(135deg,#b8912f,#e3c466,#caa54e)!important;color:#241d0a!important}
-  body.light .btn.dark{background:#241d0a!important;color:#f0d97a!important;border:0!important}
-  body.light .btn.light{background:#f3eedf!important;border:1px solid rgba(176,137,47,.28)!important;color:#221d12!important}
-  body.light .chip{background:#f3eedf!important;color:#6d6555!important} body.light .chip.active{background:linear-gradient(135deg,#b8912f,#e3c466,#caa54e)!important;color:#241d0a!important}
-  body.light .modal,body.light .small-modal{background:#fff!important;border:1px solid rgba(176,137,47,.28)!important}
-  body.light .m-head{border-bottom:1px solid rgba(176,137,47,.28)!important} body.light .m-head h3{color:#8a6d1a!important}
-  body.light .m-cart{background:#faf6ec!important;border-left:1px solid rgba(176,137,47,.28)!important}
-  body.light .m-type{background:#fff!important;color:#7a7263!important;border:1px solid rgba(176,137,47,.28)!important} body.light .m-type.active{background:linear-gradient(135deg,#b8912f,#e3c466,#caa54e)!important;color:#241d0a!important}
-  body.light .mitem{background:#fff!important;border:1px solid rgba(176,137,47,.28)!important} body.light .mitem .mn{color:#221d12!important} body.light .mitem .mp{color:#8a6d1a!important}
-  body.light .m-table{background:#fff!important;border:1px solid rgba(176,137,47,.28)!important;color:#221d12!important}
-  body.light .m-line .ml-n{color:#221d12!important} body.light .m-tot .l{color:#7a7263!important} body.light .m-tot .t,body.light .m-tot .t span:last-child{color:#8a6d1a!important}
-  body.light .ssearch{background:#f3eedf!important} body.light .ssearch input{color:#221d12!important}
-  body.light .inline-editor{background:#faf6ec!important;border:1px solid rgba(176,137,47,.28)!important} body.light .role-edit-row td{background:#faf6ec!important}
-  body.light .empty{color:#a59a83!important}
-  body.light ::-webkit-scrollbar-thumb{background:linear-gradient(180deg,#caa54e,#b8912f)} body.light ::-webkit-scrollbar-track{background:#f1ead8}
-  body.light select option{background:#fff;color:#221d12}
-
-
-</style>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-</head>
-<body>
-  <div class="topbar">
-    <div class="tb-left"><div class="tb-badge">⊕</div> <span id="tbTitle">Smart POS</span></div>
-    <div style="display:flex;align-items:center;gap:12px">
-      <button id="themeBtn" onclick="toggleTheme()" title="Switch theme" style="border:1px solid rgba(212,175,55,.35);background:rgba(212,175,55,.08);color:#e7c873;border-radius:9px;padding:7px 13px;font-weight:800;font-size:13px;cursor:pointer">🌙 Dark</button>
-      <div class="role-switch">
-        <button id="roleCashier" class="active" onclick="setRole('cashier')">Cashier</button>
-        <button id="roleWaiter" onclick="setRole('waiter')">Waiter</button>
-        <button id="roleKitchen" onclick="setRole('kitchen')">Kitchen</button>
-        <button id="roleTandoor" onclick="setRole('tandoor')">Tandoor</button>
-      </div>
-    </div>
-  </div>
-
-  <div class="app">
-    <aside class="sidebar">
-      <div class="brand"><div class="brand-icon" id="brandLogo">S</div><h3 id="brandName">Stonixra Restaurant</h3></div>
-      <nav class="nav" id="nav"></nav>
-      <div class="bottom-actions"><button class="logout">⎋ Log Out</button></div>
-    </aside>
-    <main class="main" id="main"></main>
-  </div>
-
-  <!-- NEW ORDER MODAL -->
-  <div class="modal-overlay" id="modal">
-    <div class="modal">
-      <div class="m-menu">
-        <div class="m-head"><h3>New Order</h3><button class="x" onclick="closeModal()">×</button></div>
-        <div class="m-search"><div class="ssearch">🔍 <input id="msearch" placeholder="Search dish..." oninput="renderMenuGrid()"></div><div class="m-cats" id="mcats"></div></div>
-        <div class="mgrid" id="mgrid"></div>
-      </div>
-      <div class="m-cart">
-        <div class="m-types" id="mtypes"></div>
-        <input class="m-table" id="mtable" placeholder="Table number">
-        <div class="m-lines" id="mlines"></div>
-        <div class="m-tot" id="mtot"></div>
-        <button class="m-create" id="mcreate" onclick="createOrder()">🧾 Create Order + Auto KOT</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ADD/EDIT DISH MODAL -->
-  <div class="modal-overlay" id="dishModal">
-    <div class="modal" style="max-width:440px;height:auto;display:block">
-      <div class="m-head"><h3 id="dishModalTitle">Add New Dish</h3><button class="x" onclick="closeDishModal()">×</button></div>
-      <div style="padding:18px">
-        <div id="dishImgBox" onclick="pickDishImage()" style="height:150px;background:#23232e;border-radius:12px;display:grid;place-items:center;cursor:pointer;margin-bottom:16px;overflow:hidden"></div>
-        <div class="field"><label>Dish Name</label><input id="dishName" placeholder="e.g. Chicken Tikka"></div>
-        <div class="field"><label>Price (RM)</label><input id="dishPrice" type="number" placeholder="0.00"></div>
-        <div class="field"><label>Category</label><select id="dishCat" class="input" onchange="onDishCatChange()"></select>
-          <input id="dishNewCat" class="input" placeholder="New category name" style="display:none;margin-top:8px"></div>
-        <div class="field"><label>Description (optional)</label><input id="dishDesc" placeholder="Short description"></div>
-        <div style="display:flex;gap:9px;margin-top:6px">
-          <button class="btn blue" style="flex:1" onclick="saveDish()">Save Dish</button>
-          <button class="btn light" id="dishDelete" onclick="deleteDish()" style="color:var(--red);border-color:#3a2424">Delete</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- GENERIC FORM MODAL (add/edit) -->
-  <div class="modal-overlay" id="formModal">
-    <div class="small-modal">
-      <div class="m-head"><h3 id="formModalTitle">Form</h3><button class="x" onclick="closeFormModal()">×</button></div>
-      <div class="form-grid" id="formModalBody"></div>
-      <div style="display:flex;gap:9px;padding:0 18px 18px">
-        <button class="btn blue" style="flex:1" onclick="saveFormModal()">Save</button>
-        <button class="btn light" onclick="closeFormModal()">Cancel</button>
-      </div>
-    </div>
-  </div>
-
-  <input type="file" id="imgInput" accept="image/*" style="display:none">
-  <div class="toast" id="toast"><span class="d"></span><span id="toastmsg"></span></div>
-
-<script>
 /* ---------- EDITABLE ---------- */
 let restaurantName="Smart POS";
 let logoImg=null;
@@ -663,15 +29,15 @@ const uid=()=>"#"+Math.random().toString(36).slice(2,8).toUpperCase();
 const cats=()=>["All",...new Set(MENU.map(m=>m.cat))];
 
 const NAV=[
-  {g:"Orders & Dining",items:[{k:"pos",l:"Orders Dashboard",badge:3},{k:"waiter",l:"Waiter Order Screen"},{k:"kds",l:"Kitchen Display"},{k:"quickpos",l:"Quick POS Billing"},{k:"tables",l:"Tables"},{k:"bookings",l:"Table Bookings"},{k:"service",l:"Table Service"}]},
+  {g:"Orders & Dining",items:[{k:"pos",l:"Orders Dashboard",badge:3},{k:"waiter",l:"Waiter Order Screen"},{k:"quickpos",l:"Quick POS Billing"},{k:"tables",l:"Tables"},{k:"bookings",l:"Table Bookings"}]},
   {g:"Reports & Analytics",items:[{k:"reports",l:"Reports"},{k:"closing",l:"Daily Closing"},{k:"analytics",l:"Restaurant Analytics"}]},
-  {g:"Menu & Marketing",items:[{k:"menu",l:"Menu & Dishes"},{k:"modifiers",l:"Kitchen Notes + Modifiers"},{k:"recipes",l:"Recipe Auto Stock"},{k:"qr",l:"QR Table Ordering"},{k:"promotions",l:"Promotions"}]},
+  {g:"Menu & Marketing",items:[{k:"menu",l:"Menu & Dishes"},{k:"recipes",l:"Recipe Auto Stock"},{k:"qr",l:"QR Table Ordering"},{k:"promotions",l:"Promotions"}]},
   {g:"Management",items:[{k:"staff",l:"Staff Center"},{k:"roles",l:"Roles & Permissions"},{k:"cashier",l:"Cashier Features"},{k:"customers",l:"Customer Features"},{k:"inventory",l:"Inventory"},{k:"expenses",l:"Expenses"},{k:"barcode",l:"Barcode Scanner"},{k:"kotprinter",l:"Auto KOT Printer"},{k:"branches",l:"Multi Branch"},{k:"loyalty",l:"Loyalty Points"},{k:"settings",l:"Settings"}]},
 ];
 const ROLE_NAV={
-  waiter:["waiter","tables","service","bookings"],
-  kitchen:["kds"],
-  tandoor:["kds"],
+  waiter:["waiter","tables","bookings"],
+  kitchen:["pos"],
+  tandoor:["pos"],
   cashier:null
 };
 
@@ -688,7 +54,13 @@ let expenses=[];
 let promos=[];
 let customers=[];
 let branches=[];
-let rolePerms=[{role:"Admin",perms:"Full access, reports, settings"},{role:"Manager",perms:"Orders, inventory, reports"},{role:"Cashier",perms:"Billing, receipts, customers"},{role:"Waiter",perms:"Create orders, table service"},{role:"Kitchen",perms:"KDS only, update status"}];
+const PERMISSION_OPTIONS=["Full access","Orders Dashboard","Create Orders","Edit Orders","Settle Bills","Split Payment","Discount","Refund / Void","Print Receipts","Past Orders","Tables","Table Bookings","Quick POS Billing","Reports","Restaurant Analytics","Daily Closing","Expenses","Menu & Dishes","Recipe Auto Stock","QR Table Ordering","Promotions","Staff Center","Roles & Permissions","Cashier Features","Customer Features","Inventory","Barcode Scanner","Auto KOT Printer","Multi Branch","Loyalty Points","Settings"];
+let rolePerms=[
+  {role:"Admin",perms:[...PERMISSION_OPTIONS]},
+  {role:"Manager",perms:PERMISSION_OPTIONS.filter(p=>!["Settings"].includes(p))},
+  {role:"Cashier",perms:["Orders Dashboard","Settle Bills","Split Payment","Discount","Refund / Void","Print Receipts","Past Orders","Reports","Daily Closing","Expenses","Menu & Dishes","Cashier Features","Customer Features"]},
+  {role:"Waiter",perms:["Create Orders","Tables","Table Bookings"]}
+];
 let openRoleIndex=null;
 let barcodeText="";
 
@@ -708,7 +80,7 @@ function setRole(r){
   const kbtn=document.getElementById("roleKitchen"); if(kbtn)kbtn.classList.toggle("active",r==="kitchen");
   const tbtn=document.getElementById("roleTandoor"); if(tbtn)tbtn.classList.toggle("active",r==="tandoor");
   if(r==="waiter") nav="waiter";
-  if(r==="kitchen"||r==="tandoor") nav="kds";
+  if(r==="kitchen"||r==="tandoor") nav="pos";
   if(r==="cashier" && nav==="waiter") nav="pos";
   renderNav();
   toast(r==="waiter"?"Waiter mode — simple order taking":r==="kitchen"?"Kitchen mode — main kitchen only":r==="tandoor"?"Tandoor mode — breads only":"Cashier mode — billing");
@@ -963,21 +335,27 @@ function bookingsView(){
 }
 /* ---------- SERVICE ---------- */
 function serviceView(){
-  return head("Table Service","Active service requests")+panelTable(["Table","Request","Waiter","Status"],serviceReqs.map((s,i)=>[`<b>${s.t}</b>`,s.r,s.w,`<span class="pill ${s.s==='Done'?'green-pill':'red-pill'}" onclick="serviceReqs[${i}].s='Done';render()" style="cursor:pointer">${s.s}</span>`]));
+  return head("Active service requests")+panelTable(["Table","Request","Waiter","Status"],serviceReqs.map((s,i)=>[`<b>${s.t}</b>`,s.r,s.w,`<span class="pill ${s.s==='Done'?'green-pill':'red-pill'}" onclick="serviceReqs[${i}].s='Done';render()" style="cursor:pointer">${s.s}</span>`]));
 }
 /* ---------- STAFF ---------- */
 function staffView(){
   return head("Staff Center","Attendance, roles and permissions",'<button class="btn light" onclick="addStaff()">+ Add Staff</button><button class="btn dark" onclick="downloadCSV(\'staff\',[\'User\',\'Designation\',\'Location\',\'Status\',\'ClockIn\'],staff.map(s=>[s.u,s.d,s.l,s.s,s.ci]))">Download Data</button>')+panelTable(["User","Designation","Location","Status","Clock-In"],staff.map((s,i)=>[`<b>${s.u}</b>`,s.d,s.l,`<span class="pill ${s.s==='Absent'?'red-pill':'green-pill'}" onclick="toggleStaff(${i})" style="cursor:pointer">${s.s}</span>`,s.ci]));
 }
 /* ---------- INVENTORY ---------- */
+function invAlert(i){return Number(i.alert ?? i.low ?? 8)}
+function invStatus(q,alert=8){q=Number(q)||0;alert=Number(alert)||0;return q<=0?'out':q<=alert?'low':'good'}
 function invView(){
+  inventory.forEach(i=>{i.alert=invAlert(i);i.s=invStatus(i.q,i.alert)});
   const out=inventory.filter(i=>i.s==="out").length,low=inventory.filter(i=>i.s==="low").length,good=inventory.filter(i=>i.s==="good").length;
-  return head("Inventory","Ingredient stock and alerts",'<button class="btn blue" onclick="addIngredient()">+ Add Ingredient</button>')+
+  const alerts=inventory.filter(i=>i.s!=="good");
+  return head("Inventory","Ingredient stock and low-stock alerts",'<button class="btn blue" onclick="addIngredient()">+ Add Ingredient</button>')+
   `<div class="stats" style="grid-template-columns:repeat(3,1fr)"><div class="stat"><small>Out of Stock</small><h2 style="color:var(--red)">${out}</h2></div><div class="stat"><small>Low Stock</small><h2 style="color:var(--orange)">${low}</h2></div><div class="stat"><small>In Stock</small><h2 style="color:var(--green)">${good}</h2></div></div>`+
-  panelTable(["Ingredient","Stock","Unit","Status","Adjust"],inventory.map((i,idx)=>[`<b>${i.i}</b>`,i.q,i.u,pill(i.s==='good'?'In Stock':i.s==='low'?'Low':'Out',i.s==='good'?'green':'red'),`<button class="step" onclick="adjStock(${idx},-1)">−</button> <button class="step" onclick="adjStock(${idx},1)">+</button>`]));
+  (alerts.length?`<div class="panel" style="padding:14px;margin-bottom:14px;border-left:5px solid var(--orange)"><b>⚠ Low Stock Warning</b><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">${alerts.map(i=>`<span class="pill ${i.s==='out'?'red-pill':'blue-pill'}">${i.i}: ${i.q}${i.u} / alert ${invAlert(i)}${i.u}</span>`).join('')}</div></div>`:'')+
+  panelTable(["Ingredient","Stock","Unit","Low Warning","Status","Adjust","Action"],inventory.map((i,idx)=>[`<b>${i.i}</b>`,i.q,i.u,`≤ ${invAlert(i)} ${i.u}`,pill(i.s==='good'?'In Stock':i.s==='low'?'Low Stock':'Out of Stock',i.s==='good'?'green':'red'),`<button class="step" onclick="adjStock(${idx},-1)">−</button> <button class="step" onclick="adjStock(${idx},1)">+</button>`,`<button class="chip" onclick="editIngredient(${idx})">Edit</button>`]));
 }
-function adjStock(idx,d){const it=inventory[idx];it.q=Math.max(0,it.q+d);it.s=it.q===0?'out':it.q<=8?'low':'good';render();}
-function addIngredient(){openFormModal('Add Ingredient',[{name:'name',label:'Ingredient name'},{name:'q',label:'Quantity',type:'number',value:10},{name:'u',label:'Unit',value:'kg',placeholder:'kg / L / pcs'}],d=>{if(!d.name)return;const q=parseFloat(d.q)||0;const u=d.u||'kg';inventory.push({i:d.name,q,u,s:q===0?'out':q<=8?'low':'good'});toast(d.name+' added');});}
+function adjStock(idx,d){const it=inventory[idx];it.q=Math.max(0,Number(it.q||0)+d);it.alert=invAlert(it);it.s=invStatus(it.q,it.alert);render();}
+function addIngredient(){openFormModal('Add Ingredient',[{name:'name',label:'Ingredient name'},{name:'q',label:'Quantity',type:'number',value:10},{name:'u',label:'Unit',value:'kg',placeholder:'kg / L / pcs'},{name:'alert',label:'Low stock warning at',type:'number',value:5,placeholder:'Example: 5'}],d=>{if(!d.name)return;const q=parseFloat(d.q)||0;const u=d.u||'kg';const alert=parseFloat(d.alert)||0;inventory.push({i:d.name,q,u,alert,s:invStatus(q,alert)});toast(d.name+' added');});}
+function editIngredient(idx){const it=inventory[idx];openFormModal('Edit Ingredient',[{name:'name',label:'Ingredient name',value:it.i},{name:'q',label:'Quantity',type:'number',value:it.q},{name:'u',label:'Unit',value:it.u||'kg'},{name:'alert',label:'Low stock warning at',type:'number',value:invAlert(it)}],d=>{if(!d.name)return;it.i=d.name;it.q=parseFloat(d.q)||0;it.u=d.u||'kg';it.alert=parseFloat(d.alert)||0;it.s=invStatus(it.q,it.alert);toast('Ingredient updated');});}
 
 /* ---------- EXPENSES ---------- */
 const EXPENSE_CATS=['Staff Meal','Gas','Supplies','Repair','Utilities','Rent','Delivery','Other'];
@@ -1238,7 +616,7 @@ function sendWaiterOrder(){
   if(!cart.length)return;
   const table=(document.getElementById('wtable')?.value||window.wTable||'').trim();
   const o={no:"#"+seq++,inv:uid(),type:cType,table:cType==="dine"?(table||"—"):null,status:"Unpaid",stage:0,age:"just now",note:wNote,customer:wCustomer,phone:wPhone,address:wAddress,items:cart.map(i=>({...i,station:stationOf(i)}))};
-  orders.unshift(o);selNo=o.no;cart=[];wNote="";toast("Order "+o.no+" sent to kitchen");go("kds");
+  orders.unshift(o);selNo=o.no;cart=[];wNote="";toast("Order "+o.no+" created");go("pos");
 }
 
 /* ---------- QUICK POS BILLING ---------- */
@@ -1260,7 +638,69 @@ function kdsView(){
 }
 
 /* ---------- QR MENU ---------- */
-function qrView(){const url=location.href.split('#')[0].replace('app.html','index.html')+'?menu=qr';return head("QR Menu","Show QR on tables for digital menu and ordering",'<button class="btn blue" onclick="window.print()">Print QR Sheet</button>')+`<div class="panel" style="padding:22px;display:grid;grid-template-columns:260px 1fr;gap:22px;align-items:center"><div style="width:220px;height:220px;border:12px solid #111;display:grid;place-items:center;font-weight:900;text-align:center;background:repeating-linear-gradient(45deg,#fff,#fff 8px,#111 8px,#111 12px)"><div style="background:white;padding:14px;border-radius:8px">QR MENU<br><small>${restaurantName}</small></div></div><div><h2>Table QR Ordering</h2><p style="color:var(--muted);margin:10px 0">Use this placeholder for table QR menu. When hosted, connect it with customer ordering page.</p><input class="input" value="${url}" readonly><br><br><button class="btn green" onclick="toast('QR copied')">Copy Menu Link</button></div></div>`;}
+let qrTable="01";
+let savedQRCodes=[];
+function menuBaseUrl(){return location.href.split('?')[0].replace('app.html','menu.html');}
+function qrTableClean(t=qrTable){return String(t).replace(/^T/i,'').padStart(2,'0');}
+function qrMenuLink(t=qrTable){return menuBaseUrl()+"?table=T"+qrTableClean(t);}
+function qrImageUrl(link,size=260){return 'https://api.qrserver.com/v1/create-qr-code/?size='+size+'x'+size+'&data='+encodeURIComponent(link);}
+function copyQRLink(t=qrTable){navigator.clipboard?.writeText(qrMenuLink(t)).then(()=>toast('QR menu link copied')).catch(()=>toast('Copy not available'));}
+function saveCurrentQR(){
+  const t=qrTableClean(qrTable);
+  const link=qrMenuLink(t);
+  const exists=savedQRCodes.find(x=>x.table===t);
+  if(exists){exists.link=link;exists.updated_at=new Date().toISOString();toast('Table T'+t+' QR updated');}
+  else{savedQRCodes.push({table:t,link,created_at:new Date().toISOString(),updated_at:new Date().toISOString()});toast('Table T'+t+' QR saved');}
+  render();
+}
+function deleteSavedQR(t){
+  if(confirm('Delete saved QR for Table T'+qrTableClean(t)+'?')){savedQRCodes=savedQRCodes.filter(x=>x.table!==qrTableClean(t));toast('Saved QR deleted');render();}
+}
+function printQRFor(t=qrTable){
+  const table=qrTableClean(t);
+  const link=qrMenuLink(table);
+  const qr=qrImageUrl(link,320);
+  const w=window.open('','_blank');
+  w.document.write(`<!doctype html><title>Table QR T${table}</title><body style="font-family:Arial;text-align:center;padding:35px"><h1>${restaurantName}</h1><h2>Table T${table}</h2><img src="${qr}" style="width:320px;height:320px"><p>Scan to view menu and place order</p><p style="font-size:12px">${link}</p><script>window.print()<\/script></body>`);
+  w.document.close();
+}
+function printQRSheet(){
+  const rows=(savedQRCodes.length?savedQRCodes:safeTableList().map(t=>({table:String(t.n).padStart(2,'0'),link:qrMenuLink(String(t.n).padStart(2,'0'))})));
+  const w=window.open('','_blank');
+  w.document.write(`<!doctype html><title>QR Sheet</title><body style="font-family:Arial;padding:25px"><h1>${restaurantName} — Table QR Codes</h1><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:22px">${rows.map(r=>`<div style="text-align:center;border:1px solid #ddd;padding:15px;break-inside:avoid"><h2>Table T${r.table}</h2><img src="${qrImageUrl(r.link,240)}" style="width:240px;height:240px"><p style="font-size:11px;word-break:break-all">${r.link}</p></div>`).join('')}</div><script>window.print()<\/script></body>`);
+  w.document.close();
+}
+function qrView(){
+  const tablesList=safeTableList().map(t=>String(t.n).padStart(2,'0'));
+  const link=qrMenuLink();
+  const qr=qrImageUrl(link,260);
+  const savedRows=savedQRCodes.slice().sort((a,b)=>a.table.localeCompare(b.table)).map(r=>[
+    `<b>Table T${r.table}</b>`,
+    `<span style="font-size:12px;color:var(--muted);word-break:break-all">${r.link}</span>`,
+    `<img src="${qrImageUrl(r.link,72)}" style="width:72px;height:72px;background:white;border:6px solid #fff;border-radius:8px">`,
+    `<button class="chip" onclick="copyQRLink('${r.table}')">Copy</button> <a class="chip" href="${r.link}" target="_blank">Open</a> <button class="chip" onclick="printQRFor('${r.table}')">Print</button> <button class="chip" style="color:var(--red)" onclick="deleteSavedQR('${r.table}')">Delete</button>`
+  ]);
+  return head("QR Table Ordering","Generate and save real table QR codes. Customer scans, adds items to cart and places order directly into POS.",'<button class="btn blue" onclick="printQRSheet()">Print QR Sheet</button>')+
+  `<div class="panel" style="padding:22px;display:grid;grid-template-columns:300px 1fr;gap:26px;align-items:center">
+    <div style="text-align:center"><img src="${qr}" style="width:260px;height:260px;border:12px solid #fff;box-shadow:0 10px 25px rgba(0,0,0,.12);background:white"><div style="margin-top:10px;font-weight:900;color:var(--blue)">Table T${qrTableClean(qrTable)}</div></div>
+    <div>
+      <h2>Customer QR Ordering</h2>
+      <p style="color:var(--muted);margin:10px 0">Select a table, save the QR, and place it on that table. Saved QR codes stay below for reprint later.</p>
+      <label style="font-size:12px;font-weight:900;color:var(--muted);text-transform:uppercase">Select Table</label>
+      <select class="input" style="max-width:220px;margin:6px 0 12px" onchange="qrTable=this.value;render()">${tablesList.map(t=>`<option value="${t}" ${t===qrTableClean(qrTable)?'selected':''}>Table T${t}</option>`).join('')}</select>
+      <label style="font-size:12px;font-weight:900;color:var(--muted);text-transform:uppercase">Menu Link</label>
+      <input class="input" value="${link}" readonly>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px">
+        <button class="btn blue" onclick="saveCurrentQR()">Save QR</button>
+        <button class="btn green" onclick="copyQRLink()">Copy Link</button>
+        <a class="btn light" href="${link}" target="_blank">Open Customer Menu</a>
+        <button class="btn dark" onclick="printQRFor()">Print QR</button>
+      </div>
+    </div>
+  </div>
+  <div class="panel" style="padding:18px;margin-top:16px"><h3>Saved QR Codes</h3>${savedRows.length?panelTable(['Table','Link','QR','Action'],savedRows):'<div class="empty">No saved QR yet. Select a table and click Save QR.</div>'}</div>
+  <div class="panel" style="padding:18px;margin-top:16px"><h3>How it works</h3><p style="color:var(--muted);margin-top:8px">Customer scans QR → menu opens → customer adds items → places order → order appears in POS dashboard.</p></div>`;
+}
 
 /* ---------- BARCODE SCANNER ---------- */
 function barcodeView(){return head("Barcode Scanner","Keyboard/USB scanner ready. Scan or type product code and add item to cart")+`<div class="panel" style="padding:22px;max-width:740px"><label style="font-weight:900">Scan Code</label><input class="input" autofocus placeholder="Scan barcode here" value="${barcodeText}" oninput="barcodeText=this.value"><div style="margin-top:12px;display:flex;gap:8px"><button class="btn blue" onclick="barcodeAdd()">Add Scanned Item</button><button class="btn light" onclick="barcodeText='';render()">Clear</button></div><p style="color:var(--muted);font-size:13px;margin-top:12px">Demo logic: code 1001 adds Chicken Biryani, 1002 adds BBQ, 1003 adds Drink.</p></div>`;}
@@ -1271,29 +711,47 @@ function branchesView(){const total=branches.reduce((s,b)=>s+b.sales,0);return h
 function addBranch(){openFormModal('Add Branch',[{name:'n',label:'Branch name'}],d=>{if(!d.n)return;branches.push({n:d.n,orders:0,sales:0,status:'Online'});toast('Branch added');});}
 
 /* ---------- ROLES / PERMISSIONS ---------- */
+function rolePermArray(r){
+  if(Array.isArray(r.perms)) return r.perms;
+  return String(r.perms||'').split(',').map(x=>x.trim()).filter(Boolean);
+}
+function rolePermPreview(r){
+  const arr=rolePermArray(r);
+  const shown=arr.slice(0,6).map(x=>`<span class="pill">${x}</span>`).join(' ');
+  return shown + (arr.length>6?` <span class="pill blue-pill">+${arr.length-6} more</span>`:'');
+}
 function rolesView(){
   const rows=rolePerms.map((r,i)=>`
     <tr>
-      <td><b>${r.role}</b></td>
-      <td>${r.perms}</td>
-      <td style="text-align:right"><button class="chip" onclick="toggleRoleEdit(${i})">${openRoleIndex===i?'Close':'Edit'}</button></td>
+      <td style="width:150px"><b>${r.role}</b><br><small style="color:var(--muted)">${rolePermArray(r).length} permissions</small></td>
+      <td><div style="display:flex;gap:6px;flex-wrap:wrap;max-width:980px">${rolePermPreview(r)}</div></td>
+      <td style="text-align:right;width:90px"><button class="chip" onclick="toggleRoleEdit(${i})">${openRoleIndex===i?'Close':'Edit'}</button></td>
     </tr>
     ${openRoleIndex===i?`<tr class="role-edit-row"><td colspan="3">
-      <div class="inline-editor">
-        <label>Permissions</label>
-        <textarea id="rolePermInput">${r.perms}</textarea>
-        <div class="inline-actions">
-          <button class="btn blue" onclick="saveRolePerm(${i})">Save</button>
-          <button class="btn light" onclick="openRoleIndex=null;render()">Cancel</button>
+      <div class="inline-editor" style="max-width:100%;background:#fffaf0">
+        <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap">
+          <div><b>Edit ${r.role} permissions</b><br><small style="color:var(--muted)">Tick allowed permissions, untick to remove.</small></div>
+          <div style="display:flex;gap:8px"><button class="chip" onclick="selectRolePerms(${i},true)">Select All</button><button class="chip" onclick="selectRolePerms(${i},false)">Clear All</button></div>
         </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px;margin-top:14px">
+          ${PERMISSION_OPTIONS.map(p=>`<label style="display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:10px;padding:10px;background:#fff"><input type="checkbox" class="rolePermBox" value="${escAttr(p)}" ${rolePermArray(r).includes(p)?'checked':''}> <span>${p}</span></label>`).join('')}
+        </div>
+        <div class="inline-actions" style="margin-top:14px"><button class="btn blue" onclick="saveRolePerm(${i})">Save</button><button class="btn light" onclick="openRoleIndex=null;render()">Cancel</button></div>
       </div>
     </td></tr>`:''}
-  `).join("");
-  return head("Roles & Permissions","Admin, Manager, Cashier, Waiter and Kitchen access control")+
-  `<div class="panel"><div class="detail-body" style="padding:0"><table class="items-table"><thead><tr><th>Role</th><th>Permissions</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+  `).join('');
+  return head("Roles & Permissions","Clean checkbox permissions for each role")+
+  `<div class="panel"><div class="detail-body" style="padding:0"><table class="items-table"><thead><tr><th>Role</th><th>Permissions Preview</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
 }
 function toggleRoleEdit(i){openRoleIndex=openRoleIndex===i?null:i;render();}
-function saveRolePerm(i){const el=document.getElementById('rolePermInput');const v=el?el.value.trim():'';if(v){rolePerms[i].perms=v;toast('Permissions updated');}openRoleIndex=null;render();}
+function selectRolePerms(i,all){document.querySelectorAll('.rolePermBox').forEach(b=>b.checked=all);}
+function saveRolePerm(i){
+  const vals=[...document.querySelectorAll('.rolePermBox:checked')].map(b=>b.value);
+  rolePerms[i].perms=vals;
+  toast('Permissions updated');
+  openRoleIndex=null;
+  render();
+}
 function editRole(i){toggleRoleEdit(i);}
 
 /* ---------- LOYALTY POINTS ---------- */
@@ -1394,7 +852,7 @@ function initSupabase(){
   return true;
 }
 function appState(){
-  return {restaurantName,logoImg,role,MENU,orders,salesLog,seq,selNo,tables,bookings,serviceReqs,staff,inventory,expenses,promos,customers,branches,rolePerms,barcodeText};
+  return {restaurantName,logoImg,role,MENU,orders,salesLog,seq,selNo,tables,bookings,serviceReqs,staff,inventory,expenses,promos,customers,branches,rolePerms,barcodeText,savedQRCodes};
 }
 function applyState(s){
   if(!s||typeof s!=="object")return;
@@ -1417,6 +875,7 @@ function applyState(s){
   branches=Array.isArray(s.branches)?s.branches:branches;
   rolePerms=Array.isArray(s.rolePerms)?s.rolePerms:rolePerms;
   barcodeText=s.barcodeText||barcodeText;
+  savedQRCodes=Array.isArray(s.savedQRCodes)?s.savedQRCodes:savedQRCodes;
 }
 async function loadCloud(){
   if(!initSupabase()){toast("Supabase not connected");return;}
@@ -1424,6 +883,15 @@ async function loadCloud(){
   if(error){toast("Load error: "+error.message);return;}
   if(data?.value){applyState(data.value);renderNav();render();toast("Supabase data loaded");}
   else{toast("No cloud data found");}
+}
+async function loadCloudSilent(){
+  if(!dbReady||!db)return;
+  const {data,error}=await db.from("pos_data").select("value").eq("app","stonixra_pos").eq("key","state").maybeSingle();
+  if(error||!data?.value)return;
+  const before=JSON.stringify((orders||[]).map(o=>o.no));
+  applyState(data.value);
+  const after=JSON.stringify((orders||[]).map(o=>o.no));
+  if(before!==after){renderNav();render();}
 }
 async function saveCloud(show=true){
   if(!initSupabase()){if(show)toast("Add Supabase URL and Anon Key first");return;}
@@ -1481,10 +949,19 @@ function tablesView(){const list=safeTableList(); const cnt=s=>list.filter(t=>t.
 function transferTable(){openFormModal('Transfer Table',[{name:'f',label:'From table',placeholder:'04'},{name:'t',label:'To table',placeholder:'08'}],d=>{if(!d.f||!d.t)return;const f=String(d.f).replace('T','').padStart(2,'0');const t=String(d.t).replace('T','').padStart(2,'0');orders.forEach(o=>{if(String(o.table).padStart(2,'0')===f)o.table=t});toast('Table T'+f+' moved to T'+t);});}
 function mergeTable(){openFormModal('Merge Tables',[{name:'a',label:'Main table',placeholder:'04'},{name:'b',label:'Merge with',placeholder:'05'}],d=>{if(!d.a||!d.b)return;toast('Tables T'+d.a+' + T'+d.b+' merged');});}
 function splitBillDemo(){toast('Split bill mode added in Cashier Features'); go('cashier');}
-function cashierFeaturesView(){return head('Cashier Features','Fast payments, split bill, refunds, discounts and closing workflow')+
-`<div class="stats"><div class="stat"><small>Cash</small><h2>${rm(cashierShift.cash)}</h2></div><div class="stat"><small>Card</small><h2>${rm(cashierShift.card)}</h2></div><div class="stat"><small>QR Pay</small><h2>${rm(cashierShift.qr)}</h2></div><div class="stat"><small>Expenses</small><h2 style="color:var(--red)">${rm(cashierShift.expense)}</h2></div></div>
-<div class="grid3" style="grid-template-columns:1fr 1fr"><section class="panel" style="padding:18px"><h3>Payment Methods</h3><div style="display:grid;gap:10px;margin-top:14px">${paymentMethods.map((p,i)=>`<div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line);padding:10px 0"><b>${p.name}</b><span class="pill ${p.active?'green-pill':'red-pill'}" onclick="paymentMethods[${i}].active=!paymentMethods[${i}].active;render()" style="cursor:pointer">${p.active?'Active':'Off'}</span></div>`).join('')}</div></section>
-<section class="panel" style="padding:18px"><h3>Quick Cashier Actions</h3><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px"><button class="btn blue" onclick="toast('Split payment mode ready')">Split Payment</button><button class="btn light" onclick="toast('Refund request sent for manager approval')">Refund / Void</button><button class="btn green" onclick="toast('Discount applied')">Quick Discount</button><button class="btn dark" onclick="go('closing')">Daily Closing</button></div></section></div>`;}
+function cashierFeaturesView(){
+  const todaySalesByType = paymentMethods.map(p=>({name:p.name,total:salesLog.filter(r=>normalizeSaleKey(r.key)===todayKey() && (r.payment||r.pay||'Cash')===p.name).reduce((a,r)=>a+(Number(r.sales)||Number(r.total)||0),0)}));
+  const cashTotal=todaySalesByType.find(x=>x.name==='Cash')?.total || cashierShift.cash || 0;
+  const cardTotal=todaySalesByType.filter(x=>['Card','Debit Card'].includes(x.name)).reduce((a,x)=>a+x.total,0) || cashierShift.card || 0;
+  const qrTotal=todaySalesByType.filter(x=>['QR','TNG'].includes(x.name)).reduce((a,x)=>a+x.total,0) || cashierShift.qr || 0;
+  return head('Cashier Features','Payment method settings and today collection summary','<button class="btn dark" onclick="go(\'closing\')">Daily Closing</button>')+
+`<div class="stats"><div class="stat"><small>Cash</small><h2>${rm(cashTotal)}</h2></div><div class="stat"><small>Card / Debit</small><h2>${rm(cardTotal)}</h2></div><div class="stat"><small>QR / TNG</small><h2>${rm(qrTotal)}</h2></div><div class="stat"><small>Expenses</small><h2 style="color:var(--red)">${rm(todayExpenseTotal())}</h2></div></div>
+<div class="grid3" style="grid-template-columns:1fr 1fr"><section class="panel" style="padding:18px"><h3>Payment Methods</h3><div style="display:grid;gap:10px;margin-top:14px">${paymentMethods.map((p,i)=>`<div style="display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;border-bottom:1px solid var(--line);padding:10px 0"><b>${p.name}</b><button class="chip" onclick="editPaymentMethod(${i})">Edit</button><button class="pill ${p.active?'green-pill':'red-pill'}" onclick="paymentMethods[${i}].active=!paymentMethods[${i}].active;render()" style="border:0;cursor:pointer">${p.active?'Active':'Off'}</button></div>`).join('')}</div></section>
+<section class="panel" style="padding:18px"><h3>Today Collection Breakdown</h3><div style="display:grid;gap:10px;margin-top:14px">${todaySalesByType.map(x=>`<div style="display:flex;justify-content:space-between;border-bottom:1px solid var(--line);padding:10px 0"><b>${x.name}</b><span>${rm(x.total)}</span></div>`).join('')}</div><p style="color:var(--muted);font-size:13px;margin-top:14px">Split Payment, Discount, Refund and Void will appear inside the selected order bill summary.</p></section></div>`;}
+function editPaymentMethod(i){
+  const p=paymentMethods[i];
+  openFormModal('Edit Payment Method',[{name:'name',label:'Payment method name',value:p.name},{name:'active',label:'Status',type:'select',value:p.active?'Active':'Off',options:['Active','Off']}],d=>{p.name=(d.name||p.name).trim();p.active=d.active==='Active';toast('Payment method updated');});
+}
 function customerFeaturesView(){return head('Customer Features','Customer database, WhatsApp receipt, credit/due, tags and membership')+
 `<div class="stats" style="grid-template-columns:repeat(4,1fr)"><div class="stat"><small>Customers</small><h2>${customers.length}</h2></div><div class="stat"><small>VIP</small><h2>${customers.filter(c=>c.l==='VIP').length}</h2></div><div class="stat"><small>Credit/Due</small><h2>${rm(260)}</h2></div><div class="stat"><small>WhatsApp Receipts</small><h2>Ready</h2></div></div>`+
 panelTable(['Customer','Phone','Tier','Tags','Action'],customers.map((c,i)=>[`<b>${c.n}</b>`,c.p,pill(c.l,c.l==='VIP'?'blue':c.l==='Gold'?'green':''),customerTags.slice(0,2+(i%3)).map(x=>`<span class="pill">${x}</span>`).join(' '),`<button class="chip" onclick="sendWhatsappReceipt(${i})">WhatsApp</button> <button class="chip" onclick="editCustomer(${i})">Edit</button>`]));}
@@ -1493,11 +970,71 @@ function modifiersView(){const cats=Object.keys(modifiers); return head('Kitchen
 `<div class="grid3">${cats.map(c=>`<section class="panel" style="padding:16px"><h3>${c}</h3><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">${modifiers[c].map(x=>`<span class="pill blue-pill">${x}</span>`).join('')}</div><button class="btn light" style="margin-top:14px" onclick="addModifier('${c}')">+ Add ${c}</button></section>`).join('')}</div>
 <section class="panel" style="padding:16px;margin-top:16px"><h3>Example KOT Note</h3><p style="color:var(--muted);margin-top:8px">Chicken Biryani — Extra Spicy, No Onion, Less Salt</p></section>`;}
 function addModifier(c){openFormModal('Add '+c+' Modifier',[{name:'v',label:'Option name'}],d=>{if(d.v){modifiers[c].push(d.v);toast('Modifier added');}});}
-function recipesView(){return head('Recipe & Auto Stock Deduction','When item is sold, ingredient stock is deducted automatically.')+
-`<div class="panel" style="padding:16px;margin-bottom:16px"><button class="btn blue" onclick="deductRecipeDemo()">Test Auto Deduct From Selected Order</button></div>`+
-panelTable(['Menu Item','Recipe Ingredients','Action'],MENU.filter(m=>recipes[m.id]).map(m=>[`<b>${m.name}</b>`,recipes[m.id].map(r=>`${r.i}: ${r.q}${r.u}`).join('<br>'),`<button class="chip" onclick="editRecipe(${m.id})">Edit Recipe</button>`]));}
-function editRecipe(id){toast('Recipe editor ready for '+(MENU.find(m=>m.id===id)?.name||'item'));}
-function deductRecipeDemo(){const o=orders.find(x=>x.no===selNo)||orders[0]; if(!o){toast('No order selected');return;} o.items.forEach(it=>{(recipes[it.id]||[]).forEach(r=>{const inv=inventory.find(x=>x.i===r.i); if(inv){inv.q=Math.max(0,Number(inv.q)-(r.q*it.qty)); inv.s=inv.q===0?'out':inv.q<=8?'low':'good';}})}); toast('Stock auto deducted for '+o.no); go('inventory');}
+function recipesView(){
+  const rows=MENU.map(m=>{
+    const list=recipes[m.id]||[];
+    const ing=list.length?list.map(r=>`${r.i}: ${r.q}${r.u}`).join('<br>'):'<span style="color:var(--muted)">No recipe added</span>';
+    const action=list.length
+      ? `<button class="chip" onclick="editRecipe(${m.id})">Edit</button> <button class="chip" style="color:var(--red)" onclick="deleteRecipe(${m.id})">Delete</button>`
+      : `<button class="chip" onclick="editRecipe(${m.id})">Add</button>`;
+    return [`<b>${m.name}</b>`, ing, action];
+  });
+  return head('Recipe & Auto Stock Deduction','Select ingredients from Inventory and set quantity per menu item. Stock will be deducted automatically when sold.',
+    '<button class="btn blue" onclick="addRecipe()">+ Add Recipe</button>')+
+    panelTable(['Menu Item','Recipe Ingredients','Action'],rows);
+}
+let recipeEditId=null, recipeDraft=[];
+function inventoryUnitByName(name){return (inventory.find(x=>x.i===name)||{}).u||'';}
+function inventoryOptions(selected){
+  if(!inventory.length)return '<option value="">No inventory found</option>';
+  return inventory.map(x=>`<option value="${escAttr(x.i)}" ${x.i===selected?'selected':''}>${escAttr(x.i)} (${escAttr(x.u||'unit')})</option>`).join('');
+}
+function addRecipe(){openRecipeBuilder(null);}
+function editRecipe(id){openRecipeBuilder(id);}
+function openRecipeBuilder(id){
+  recipeEditId=id||null;
+  recipeDraft=(recipeEditId && recipes[recipeEditId]) ? recipes[recipeEditId].map(r=>({...r})) : [];
+  if(!recipeDraft.length && inventory.length) recipeDraft=[{i:inventory[0].i,q:1,u:inventory[0].u||''}];
+  formModalSave=saveRecipeBuilder;
+  document.getElementById('formModalTitle').textContent=recipeEditId ? 'Edit Recipe — '+(MENU.find(m=>m.id===recipeEditId)?.name||'Item') : 'Add Recipe';
+  document.getElementById('formModalBody').innerHTML=`
+    ${recipeEditId?'':`<div><label>Menu Item</label><select id="fm_recipeMenu">${MENU.map(m=>`<option value="${m.id}">${escAttr(m.name)}</option>`).join('')}</select></div>`}
+    <div class="admin-lock" style="margin:0">Select ingredients from Inventory. Enter quantity used for one menu item.</div>
+    <div id="recipeRows" style="display:grid;gap:10px"></div>
+    <button type="button" class="btn light" onclick="addRecipeRow()">+ Add Ingredient Row</button>
+  `;
+  document.getElementById('formModal').classList.add('show');
+  renderRecipeRows();
+}
+function renderRecipeRows(){
+  const box=document.getElementById('recipeRows'); if(!box)return;
+  box.innerHTML=recipeDraft.length?recipeDraft.map((r,i)=>`
+    <div style="display:grid;grid-template-columns:1.5fr .8fr .5fr auto;gap:8px;align-items:end;border:1px solid var(--line);border-radius:10px;padding:10px;background:#fffdf7">
+      <div><label>Ingredient</label><select onchange="recipeDraft[${i}].i=this.value;recipeDraft[${i}].u=inventoryUnitByName(this.value);renderRecipeRows()">${inventoryOptions(r.i)}</select></div>
+      <div><label>Quantity</label><input type="number" step="0.01" min="0" value="${Number(r.q)||0}" oninput="recipeDraft[${i}].q=parseFloat(this.value)||0"></div>
+      <div><label>Unit</label><input class="readonly-field" readonly value="${escAttr(r.u||inventoryUnitByName(r.i)||'-')}"></div>
+      <button class="chip" style="color:var(--red);height:38px" onclick="removeRecipeRow(${i})">Delete</button>
+    </div>`).join(''):'<div class="empty">No ingredient rows. Add inventory first or click Add Ingredient Row.</div>';
+}
+function addRecipeRow(){
+  if(!inventory.length){toast('Add ingredients in Inventory first');return;}
+  recipeDraft.push({i:inventory[0].i,q:1,u:inventory[0].u||''});
+  renderRecipeRows();
+}
+function removeRecipeRow(i){recipeDraft.splice(i,1);renderRecipeRows();}
+function saveRecipeBuilder(){
+  const id=recipeEditId || parseInt(document.getElementById('fm_recipeMenu')?.value||'0');
+  const arr=recipeDraft.filter(r=>r.i && Number(r.q)>0).map(r=>({i:r.i,q:Number(r.q),u:r.u||inventoryUnitByName(r.i)}));
+  if(!id){toast('Select a menu item');return;}
+  if(!arr.length){toast('Add at least one ingredient with quantity');return;}
+  recipes[id]=arr;
+  toast('Recipe saved');
+}
+function deleteRecipe(id){
+  const item=MENU.find(m=>m.id===id);
+  if(confirm('Delete recipe for '+(item?.name||'this item')+'?')){delete recipes[id];toast('Recipe deleted');render();}
+}
+function deductRecipeDemo(){const o=orders.find(x=>x.no===selNo)||orders[0]; if(!o){toast('No order selected');return;} o.items.forEach(it=>{(recipes[it.id]||[]).forEach(r=>{const inv=inventory.find(x=>x.i===r.i); if(inv){inv.q=Math.max(0,Number(inv.q)-(r.q*it.qty)); inv.alert=invAlert(inv); inv.s=invStatus(inv.q,inv.alert);}})}); toast('Stock auto deducted for '+o.no); go('inventory');}
 function closingAutoData(){
   const key=todayKey();
   const paid=salesLog.filter(r=>normalizeSaleKey(r.key)===key);
@@ -1557,10 +1094,7 @@ function toggleTheme(){
 
 applyThemePref();
 renderNav();render();hydrated=true;
-if(dbReady){loadCloud();}
+if(dbReady){loadCloud(); setInterval(loadCloudSilent,6000);}
 if(role==="waiter"){document.getElementById("roleCashier").classList.remove("active");document.getElementById("roleWaiter").classList.add("active");}
 if(role==="kitchen"){document.getElementById("roleCashier").classList.remove("active");document.getElementById("roleKitchen")?.classList.add("active");}
 if(role==="tandoor"){document.getElementById("roleCashier").classList.remove("active");document.getElementById("roleTandoor")?.classList.add("active");}
-</script>
-</body>
-</html>

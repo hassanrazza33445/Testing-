@@ -1273,37 +1273,66 @@ function kdsView(){
 
 /* ---------- QR MENU ---------- */
 let qrTable="01";
+let savedQRCodes=[];
 function menuBaseUrl(){return location.href.split('?')[0].replace('app.html','menu.html');}
-function qrMenuLink(t=qrTable){return menuBaseUrl()+"?table=T"+String(t).replace(/^T/i,'').padStart(2,'0');}
-function copyQRLink(){navigator.clipboard?.writeText(qrMenuLink()).then(()=>toast('QR menu link copied')).catch(()=>toast('Copy not available'));}
-function printQRSheet(){
-  const link=qrMenuLink();
-  const qr='https://api.qrserver.com/v1/create-qr-code/?size=320x320&data='+encodeURIComponent(link);
+function qrTableClean(t=qrTable){return String(t).replace(/^T/i,'').padStart(2,'0');}
+function qrMenuLink(t=qrTable){return menuBaseUrl()+"?table=T"+qrTableClean(t);}
+function qrImageUrl(link,size=260){return 'https://api.qrserver.com/v1/create-qr-code/?size='+size+'x'+size+'&data='+encodeURIComponent(link);}
+function copyQRLink(t=qrTable){navigator.clipboard?.writeText(qrMenuLink(t)).then(()=>toast('QR menu link copied')).catch(()=>toast('Copy not available'));}
+function saveCurrentQR(){
+  const t=qrTableClean(qrTable);
+  const link=qrMenuLink(t);
+  const exists=savedQRCodes.find(x=>x.table===t);
+  if(exists){exists.link=link;exists.updated_at=new Date().toISOString();toast('Table T'+t+' QR updated');}
+  else{savedQRCodes.push({table:t,link,created_at:new Date().toISOString(),updated_at:new Date().toISOString()});toast('Table T'+t+' QR saved');}
+  render();
+}
+function deleteSavedQR(t){
+  if(confirm('Delete saved QR for Table T'+qrTableClean(t)+'?')){savedQRCodes=savedQRCodes.filter(x=>x.table!==qrTableClean(t));toast('Saved QR deleted');render();}
+}
+function printQRFor(t=qrTable){
+  const table=qrTableClean(t);
+  const link=qrMenuLink(table);
+  const qr=qrImageUrl(link,320);
   const w=window.open('','_blank');
-  w.document.write(`<!doctype html><title>Table QR T${qrTable}</title><body style="font-family:Arial;text-align:center;padding:35px"><h1>${restaurantName}</h1><h2>Table T${qrTable}</h2><img src="${qr}" style="width:320px;height:320px"><p>Scan to view menu and place order</p><p style="font-size:12px">${link}</p><script>window.print()<\/script></body>`);
+  w.document.write(`<!doctype html><title>Table QR T${table}</title><body style="font-family:Arial;text-align:center;padding:35px"><h1>${restaurantName}</h1><h2>Table T${table}</h2><img src="${qr}" style="width:320px;height:320px"><p>Scan to view menu and place order</p><p style="font-size:12px">${link}</p><script>window.print()<\/script></body>`);
+  w.document.close();
+}
+function printQRSheet(){
+  const rows=(savedQRCodes.length?savedQRCodes:safeTableList().map(t=>({table:String(t.n).padStart(2,'0'),link:qrMenuLink(String(t.n).padStart(2,'0'))})));
+  const w=window.open('','_blank');
+  w.document.write(`<!doctype html><title>QR Sheet</title><body style="font-family:Arial;padding:25px"><h1>${restaurantName} — Table QR Codes</h1><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:22px">${rows.map(r=>`<div style="text-align:center;border:1px solid #ddd;padding:15px;break-inside:avoid"><h2>Table T${r.table}</h2><img src="${qrImageUrl(r.link,240)}" style="width:240px;height:240px"><p style="font-size:11px;word-break:break-all">${r.link}</p></div>`).join('')}</div><script>window.print()<\/script></body>`);
   w.document.close();
 }
 function qrView(){
   const tablesList=safeTableList().map(t=>String(t.n).padStart(2,'0'));
   const link=qrMenuLink();
-  const qr='https://api.qrserver.com/v1/create-qr-code/?size=260x260&data='+encodeURIComponent(link);
-  return head("QR Table Ordering","Generate real table QR codes. Customer scans, adds items to cart and places order directly into POS.",'<button class="btn blue" onclick="printQRSheet()">Print QR Sheet</button>')+
+  const qr=qrImageUrl(link,260);
+  const savedRows=savedQRCodes.slice().sort((a,b)=>a.table.localeCompare(b.table)).map(r=>[
+    `<b>Table T${r.table}</b>`,
+    `<span style="font-size:12px;color:var(--muted);word-break:break-all">${r.link}</span>`,
+    `<img src="${qrImageUrl(r.link,72)}" style="width:72px;height:72px;background:white;border:6px solid #fff;border-radius:8px">`,
+    `<button class="chip" onclick="copyQRLink('${r.table}')">Copy</button> <a class="chip" href="${r.link}" target="_blank">Open</a> <button class="chip" onclick="printQRFor('${r.table}')">Print</button> <button class="chip" style="color:var(--red)" onclick="deleteSavedQR('${r.table}')">Delete</button>`
+  ]);
+  return head("QR Table Ordering","Generate and save real table QR codes. Customer scans, adds items to cart and places order directly into POS.",'<button class="btn blue" onclick="printQRSheet()">Print QR Sheet</button>')+
   `<div class="panel" style="padding:22px;display:grid;grid-template-columns:300px 1fr;gap:26px;align-items:center">
-    <div style="text-align:center"><img src="${qr}" style="width:260px;height:260px;border:12px solid #fff;box-shadow:0 10px 25px rgba(0,0,0,.12);background:white"><div style="margin-top:10px;font-weight:900;color:var(--blue)">Table T${qrTable}</div></div>
+    <div style="text-align:center"><img src="${qr}" style="width:260px;height:260px;border:12px solid #fff;box-shadow:0 10px 25px rgba(0,0,0,.12);background:white"><div style="margin-top:10px;font-weight:900;color:var(--blue)">Table T${qrTableClean(qrTable)}</div></div>
     <div>
       <h2>Customer QR Ordering</h2>
-      <p style="color:var(--muted);margin:10px 0">Select a table, print the QR, and place it on that table. Orders submitted from mobile will appear in Orders Dashboard as unpaid dine-in orders.</p>
+      <p style="color:var(--muted);margin:10px 0">Select a table, save the QR, and place it on that table. Saved QR codes stay below for reprint later.</p>
       <label style="font-size:12px;font-weight:900;color:var(--muted);text-transform:uppercase">Select Table</label>
-      <select class="input" style="max-width:220px;margin:6px 0 12px" onchange="qrTable=this.value;render()">${tablesList.map(t=>`<option value="${t}" ${t===qrTable?'selected':''}>Table T${t}</option>`).join('')}</select>
+      <select class="input" style="max-width:220px;margin:6px 0 12px" onchange="qrTable=this.value;render()">${tablesList.map(t=>`<option value="${t}" ${t===qrTableClean(qrTable)?'selected':''}>Table T${t}</option>`).join('')}</select>
       <label style="font-size:12px;font-weight:900;color:var(--muted);text-transform:uppercase">Menu Link</label>
       <input class="input" value="${link}" readonly>
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px">
+        <button class="btn blue" onclick="saveCurrentQR()">Save QR</button>
         <button class="btn green" onclick="copyQRLink()">Copy Link</button>
         <a class="btn light" href="${link}" target="_blank">Open Customer Menu</a>
-        <button class="btn dark" onclick="printQRSheet()">Print QR</button>
+        <button class="btn dark" onclick="printQRFor()">Print QR</button>
       </div>
     </div>
   </div>
+  <div class="panel" style="padding:18px;margin-top:16px"><h3>Saved QR Codes</h3>${savedRows.length?panelTable(['Table','Link','QR','Action'],savedRows):'<div class="empty">No saved QR yet. Select a table and click Save QR.</div>'}</div>
   <div class="panel" style="padding:18px;margin-top:16px"><h3>How it works</h3><p style="color:var(--muted);margin-top:8px">Customer scans QR → menu opens → customer adds items → places order → order appears in POS dashboard.</p></div>`;
 }
 
@@ -1457,7 +1486,7 @@ function initSupabase(){
   return true;
 }
 function appState(){
-  return {restaurantName,logoImg,role,MENU,orders,salesLog,seq,selNo,tables,bookings,serviceReqs,staff,inventory,expenses,promos,customers,branches,rolePerms,barcodeText};
+  return {restaurantName,logoImg,role,MENU,orders,salesLog,seq,selNo,tables,bookings,serviceReqs,staff,inventory,expenses,promos,customers,branches,rolePerms,barcodeText,savedQRCodes};
 }
 function applyState(s){
   if(!s||typeof s!=="object")return;
@@ -1480,6 +1509,7 @@ function applyState(s){
   branches=Array.isArray(s.branches)?s.branches:branches;
   rolePerms=Array.isArray(s.rolePerms)?s.rolePerms:rolePerms;
   barcodeText=s.barcodeText||barcodeText;
+  savedQRCodes=Array.isArray(s.savedQRCodes)?s.savedQRCodes:savedQRCodes;
 }
 async function loadCloud(){
   if(!initSupabase()){toast("Supabase not connected");return;}
@@ -1583,38 +1613,56 @@ function recipesView(){
       : `<button class="chip" onclick="editRecipe(${m.id})">Add</button>`;
     return [`<b>${m.name}</b>`, ing, action];
   });
-  return head('Recipe & Auto Stock Deduction','Add or edit item recipes. When an item is sold, ingredient stock is deducted automatically.',
+  return head('Recipe & Auto Stock Deduction','Select ingredients from Inventory and set quantity per menu item. Stock will be deducted automatically when sold.',
     '<button class="btn blue" onclick="addRecipe()">+ Add Recipe</button>')+
     panelTable(['Menu Item','Recipe Ingredients','Action'],rows);
 }
-function recipeText(list){return (list||[]).map(r=>`${r.i}: ${r.q}${r.u}`).join('\n');}
-function parseRecipeText(txt){
-  return String(txt||'').split(/\n+/).map(x=>x.trim()).filter(Boolean).map(line=>{
-    const m=line.match(/^(.+?)\s*:\s*([0-9.]+)\s*([a-zA-Z]+|kg|g|L|ml|pcs)?$/);
-    if(m)return {i:m[1].trim(),q:parseFloat(m[2])||0,u:m[3]||''};
-    return {i:line,q:0,u:''};
-  });
+let recipeEditId=null, recipeDraft=[];
+function inventoryUnitByName(name){return (inventory.find(x=>x.i===name)||{}).u||'';}
+function inventoryOptions(selected){
+  if(!inventory.length)return '<option value="">No inventory found</option>';
+  return inventory.map(x=>`<option value="${escAttr(x.i)}" ${x.i===selected?'selected':''}>${escAttr(x.i)} (${escAttr(x.u||'unit')})</option>`).join('');
 }
-function addRecipe(){
-  openFormModal('Add Recipe',[
-    {name:'item',label:'Menu Item',type:'select',value:MENU[0]?.id||'',options:MENU.map(m=>m.id+' | '+m.name)},
-    {name:'items',label:'Recipe Ingredients',type:'textarea',placeholder:'Example:\nBasmati Rice: 0.25kg\nChicken: 0.2kg\nYogurt: 0.05L'}
-  ],d=>{
-    const id=parseInt(String(d.item).split('|')[0]);
-    const arr=parseRecipeText(d.items);
-    if(!id||!arr.length){toast('Select item and add ingredients');return;}
-    recipes[id]=arr; toast('Recipe saved');
-  });
+function addRecipe(){openRecipeBuilder(null);}
+function editRecipe(id){openRecipeBuilder(id);}
+function openRecipeBuilder(id){
+  recipeEditId=id||null;
+  recipeDraft=(recipeEditId && recipes[recipeEditId]) ? recipes[recipeEditId].map(r=>({...r})) : [];
+  if(!recipeDraft.length && inventory.length) recipeDraft=[{i:inventory[0].i,q:1,u:inventory[0].u||''}];
+  formModalSave=saveRecipeBuilder;
+  document.getElementById('formModalTitle').textContent=recipeEditId ? 'Edit Recipe — '+(MENU.find(m=>m.id===recipeEditId)?.name||'Item') : 'Add Recipe';
+  document.getElementById('formModalBody').innerHTML=`
+    ${recipeEditId?'':`<div><label>Menu Item</label><select id="fm_recipeMenu">${MENU.map(m=>`<option value="${m.id}">${escAttr(m.name)}</option>`).join('')}</select></div>`}
+    <div class="admin-lock" style="margin:0">Select ingredients from Inventory. Enter quantity used for one menu item.</div>
+    <div id="recipeRows" style="display:grid;gap:10px"></div>
+    <button type="button" class="btn light" onclick="addRecipeRow()">+ Add Ingredient Row</button>
+  `;
+  document.getElementById('formModal').classList.add('show');
+  renderRecipeRows();
 }
-function editRecipe(id){
-  const item=MENU.find(m=>m.id===id); if(!item)return;
-  openFormModal((recipes[id]?'Edit Recipe — ':'Add Recipe — ')+item.name,[
-    {name:'items',label:'Recipe Ingredients',type:'textarea',value:recipeText(recipes[id]),placeholder:'Ingredient: quantity unit'}
-  ],d=>{
-    const arr=parseRecipeText(d.items);
-    if(!arr.length){toast('Add at least one ingredient');return;}
-    recipes[id]=arr; toast('Recipe saved');
-  });
+function renderRecipeRows(){
+  const box=document.getElementById('recipeRows'); if(!box)return;
+  box.innerHTML=recipeDraft.length?recipeDraft.map((r,i)=>`
+    <div style="display:grid;grid-template-columns:1.5fr .8fr .5fr auto;gap:8px;align-items:end;border:1px solid var(--line);border-radius:10px;padding:10px;background:#fffdf7">
+      <div><label>Ingredient</label><select onchange="recipeDraft[${i}].i=this.value;recipeDraft[${i}].u=inventoryUnitByName(this.value);renderRecipeRows()">${inventoryOptions(r.i)}</select></div>
+      <div><label>Quantity</label><input type="number" step="0.01" min="0" value="${Number(r.q)||0}" oninput="recipeDraft[${i}].q=parseFloat(this.value)||0"></div>
+      <div><label>Unit</label><input class="readonly-field" readonly value="${escAttr(r.u||inventoryUnitByName(r.i)||'-')}"></div>
+      <button class="chip" style="color:var(--red);height:38px" onclick="removeRecipeRow(${i})">Delete</button>
+    </div>`).join(''):'<div class="empty">No ingredient rows. Add inventory first or click Add Ingredient Row.</div>';
+}
+function addRecipeRow(){
+  if(!inventory.length){toast('Add ingredients in Inventory first');return;}
+  recipeDraft.push({i:inventory[0].i,q:1,u:inventory[0].u||''});
+  renderRecipeRows();
+}
+function removeRecipeRow(i){recipeDraft.splice(i,1);renderRecipeRows();}
+function saveRecipeBuilder(){
+  const id=recipeEditId || parseInt(document.getElementById('fm_recipeMenu')?.value||'0');
+  const arr=recipeDraft.filter(r=>r.i && Number(r.q)>0).map(r=>({i:r.i,q:Number(r.q),u:r.u||inventoryUnitByName(r.i)}));
+  if(!id){toast('Select a menu item');return;}
+  if(!arr.length){toast('Add at least one ingredient with quantity');return;}
+  recipes[id]=arr;
+  toast('Recipe saved');
 }
 function deleteRecipe(id){
   const item=MENU.find(m=>m.id===id);
