@@ -685,6 +685,9 @@ const shortDate=(key)=>{const p=String(key).split('-');return p.length===3?`${Nu
 const dayName=(key)=>{const d=new Date(key+'T00:00:00');return isNaN(d)?'—':d.toLocaleDateString('en-US',{weekday:'short'});};
 const uid=()=>"#"+Math.random().toString(36).slice(2,8).toUpperCase();
 const cats=()=>["All",...new Set(MENU.map(m=>m.cat))];
+let menuCat="All";
+let imgTarget=null;
+let dishEditId=null, dishTempImg=null;
 
 const NAV=[
   {g:"Orders & Dining",items:[{k:"pos",l:"Orders Dashboard",badge:3},{k:"waiter",l:"Waiter Order Screen"},{k:"quickpos",l:"Quick POS Billing"},{k:"tables",l:"Tables"}]},
@@ -1145,6 +1148,60 @@ document.getElementById("imgInput").addEventListener("change",function(e){
   r.onload=()=>{if(imgTarget==="LOGO"){logoImg=r.result;renderNav();toast("Logo updated");}else if(imgTarget==="DISH"){dishTempImg=r.result;renderDishImg();imgTarget=null;return;}else{const m=MENU.find(x=>x.id===imgTarget);if(m){m.img=r.result;toast(m.name+" photo updated");}}render();imgTarget=null;};
   r.readAsDataURL(f);e.target.value="";
 });
+
+
+/* ---------- MENU & DISHES ---------- */
+function menuView(){
+  const list=MENU.filter(m=>menuCat==="All"||m.cat===menuCat);
+  const chips=cats().map(c=>`<button class="chip ${menuCat===c?'active':''}" onclick="menuCat='${c}';render()">${c}</button>`).join("");
+  return head("Menu & Dishes",MENU.length+" dishes · tap a dish to edit, or add a new one",'<button class="btn blue" onclick="openDishModal()">+ Add Dish</button>')+
+  `<div class="panel" style="padding:13px;margin-bottom:16px;display:flex;flex-wrap:wrap;gap:8px;align-items:center">${chips}</div>
+  <div class="menu-grid">${list.map(m=>`<div class="dish">
+    <div class="img" onclick="pickImage(${m.id})">${m.img?`<img src="${m.img}">`:'<span style="font-size:30px">🍽</span>'}<span class="up">Upload</span></div>
+    <div class="b" onclick="openDishModal(${m.id})" style="cursor:pointer">
+      <div class="dn">${m.name}</div><div class="dc">${m.cat}</div>
+      ${m.desc?`<div style="font-size:11px;color:var(--muted);margin-top:4px">${m.desc}</div>`:''}
+      <div class="dp">${rm(m.price)}</div>
+    </div>
+  </div>`).join("")}</div>`;
+}
+function openDishModal(id){
+  dishEditId=id||null;
+  const m=id?MENU.find(x=>x.id===id):null;
+  dishTempImg=m?m.img:null;
+  document.getElementById("dishName").value=m?m.name:"";
+  document.getElementById("dishPrice").value=m?m.price:"";
+  document.getElementById("dishDesc").value=m?(m.desc||""):"";
+  const allCats=[...new Set(MENU.map(x=>x.cat))];
+  const sel=document.getElementById("dishCat");
+  sel.innerHTML=allCats.map(c=>`<option ${m&&m.cat===c?'selected':''}>${c}</option>`).join("")+`<option value="__new">+ New category…</option>`;
+  document.getElementById("dishNewCat").style.display="none";
+  document.getElementById("dishNewCat").value="";
+  document.getElementById("dishModalTitle").textContent=id?"Edit Dish":"Add New Dish";
+  document.getElementById("dishDelete").style.display=id?"inline-block":"none";
+  renderDishImg();
+  document.getElementById("dishModal").classList.add("show");
+}
+function closeDishModal(){document.getElementById("dishModal").classList.remove("show");}
+function renderDishImg(){
+  const box=document.getElementById("dishImgBox");
+  if(!box)return;
+  box.innerHTML=dishTempImg?`<img src="${dishTempImg}" style="width:100%;height:100%;object-fit:cover;border-radius:12px">`:'<div style="text-align:center;color:#8d877c">Tap to upload photo</div>';
+}
+function pickDishImage(){imgTarget="DISH";document.getElementById("imgInput").click();}
+function onDishCatChange(){const v=document.getElementById("dishCat").value;document.getElementById("dishNewCat").style.display=v==="__new"?"block":"none";}
+function saveDish(){
+  const name=document.getElementById("dishName").value.trim();
+  if(!name){toast("Enter a dish name");return;}
+  const price=parseFloat(document.getElementById("dishPrice").value)||0;
+  let cat=document.getElementById("dishCat").value;
+  if(cat==="__new")cat=document.getElementById("dishNewCat").value.trim()||"Other";
+  const desc=document.getElementById("dishDesc").value.trim();
+  if(dishEditId){const m=MENU.find(x=>x.id===dishEditId);if(m)Object.assign(m,{name,price,cat,desc,img:dishTempImg});toast(name+" updated");}
+  else{const id=MENU.length?Math.max(...MENU.map(m=>m.id))+1:1;MENU.push({id,name,price,cat,desc,img:dishTempImg});toast(name+" added");}
+  closeDishModal();render();
+}
+function deleteDish(){if(dishEditId){MENU=MENU.filter(m=>m.id!==dishEditId);toast("Dish deleted");closeDishModal();render();}}
 
 /* ---------- CUSTOMERS ---------- */
 function customersView(){
