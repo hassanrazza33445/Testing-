@@ -2133,6 +2133,88 @@ function todayPaymentSummary(){
 customerFeaturesView=function(){const s=todayPaymentSummary();return head('Daily Sales & Expense Summary','Today payment collection, expenses, net cash and order count','<button class="btn dark" onclick="go(\'closing\')">Daily Closing</button><button class="btn blue" onclick="go(\'expenses\')">Add/View Expenses</button>')+`<div class="stats" style="grid-template-columns:1fr"><div class="stat"><small>Total Sales Today</small><h2>${rm(s.totalSales)}</h2></div></div><div class="stats"><div class="stat"><small>Cash Sale</small><h2>${rm(s.cash)}</h2></div><div class="stat"><small>TNG Sale</small><h2>${rm(s.tng)}</h2></div><div class="stat"><small>QR Sale</small><h2>${rm(s.qr)}</h2></div><div class="stat"><small>Debit/Card Sale</small><h2>${rm(s.debit)}</h2></div></div><div class="stats" style="grid-template-columns:repeat(3,1fr)"><div class="stat"><small>Total Expense</small><h2>${rm(s.totalExp)}</h2></div><div class="stat"><small>Cash Expense</small><h2>${rm(s.cashExp)}</h2></div><div class="stat"><small>Online Expense</small><h2>${rm(s.onlineExp)}</h2><div class="trend">QR + TNG + Debit/Card</div></div></div><section class="panel" style="padding:18px;margin-top:16px"><h3>Daily Summary</h3>${panelTable(['Metric','Value'],[['Total Sales',`<b>${rm(s.totalSales)}</b>`],['Total Expenses',`<b>${rm(s.totalExp)}</b>`],['Net Cash',`<b>${rm(s.netCash)}</b>`],['Total Orders Today',s.totalOrdersToday],['Paid Orders',s.paidOrders],['Unpaid Orders',s.unpaidOrders],['Refund Amount',rm(0)],['Discount Amount',rm(0)]])}</section>`};
 /* ---------- END FINAL USER CLEANUP PATCH ---------- */
 
+
+
+/* ---------- FINAL GRAPH + INVENTORY ROUTE FIX PATCH ---------- */
+function fixedLineGraph(rows, metric='sales', title='Day total'){
+  const data=(rows&&rows.length)?rows:[{key:todayKey(),sales:0,orders:0}];
+  const vals=data.map(r=>Number(r[metric]||0));
+  const maxRaw=Math.max(...vals, metric==='sales'?10:1);
+  const max=metric==='orders'?Math.max(5,Math.ceil(maxRaw*1.25)):Math.max(10,maxRaw*1.25);
+  const w=1200,h=330,left=215,right=80,top=55,bottom=70,iw=w-left-right,ih=h-top-bottom;
+  const x=i=>left+(data.length===1?iw/2:(i*iw/(data.length-1)));
+  const y=v=>top+ih-(v/max)*ih;
+  const ticks=[1,.75,.5,.25,0];
+  const grid=ticks.map(fr=>{
+    const yy=top+ih-fr*ih;
+    const val=max*fr;
+    const lab=metric==='sales'?rm(val):String(Math.round(val));
+    return `<line x1="${left}" y1="${yy}" x2="${w-right}" y2="${yy}" stroke="rgba(0,0,0,.10)"/>`+
+           `<text x="${left-28}" y="${yy+5}" text-anchor="end" font-size="14" fill="#8e826d">${lab}</text>`;
+  }).join('');
+  const pts=vals.map((v,i)=>[x(i),y(v)]);
+  let line='';
+  if(pts.length>1){
+    line=`<polyline points="${pts.map(p=>p.join(',')).join(' ')}" fill="none" stroke="#d4af37" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>`;
+  }else{
+    const yy=pts[0][1];
+    line=`<line x1="${left}" y1="${yy}" x2="${w-right}" y2="${yy}" stroke="#d4af37" stroke-width="4" stroke-linecap="round"/>`;
+  }
+  const points=pts.map((p,i)=>`<circle cx="${p[0]}" cy="${p[1]}" r="6" fill="#d4af37" stroke="#fff" stroke-width="3"/>`+
+    `<text x="${p[0]}" y="${Math.max(24,p[1]-16)}" text-anchor="middle" font-size="14" font-weight="800" fill="#8a6a00">${metric==='sales'?rm(vals[i]):vals[i]}</text>`+
+    `<text x="${p[0]}" y="${h-24}" text-anchor="middle" font-size="14" fill="#8e826d">${shortDate(data[i].key)}</text>`).join('');
+  return `<section class="panel" style="padding:20px;margin-top:16px"><h3 style="margin:0 0 14px">${title}</h3>`+
+         `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:340px;display:block;overflow:visible">${grid}${line}${points}</svg></section>`;
+}
+professionalLineGraph=fixedLineGraph;
+simpleLineGraph=fixedLineGraph;
+polishedLineGraph=fixedLineGraph;
+cleanLineGraph=fixedLineGraph;
+
+// Ensure report range buttons always work
+window.setSalesReportRange=function(r){ salesReportRange=r; render(); };
+
+// Hard route map to stop Inventory opening Daily Summary.
+window.go=function(k){ nav=k; renderNav(); render(); };
+window.render=function(){
+  const m=document.getElementById('main'); if(!m) return;
+  let html='';
+  if(nav==='inventory') html=invView();
+  else if(nav==='customers') html=customerFeaturesView();
+  else {
+    const map={pos:posView,waiter:waiterView,quickpos:quickPosView,tables:tablesView,reports:reportView,closing:closingView,analytics:analyticsView,menu:menuView,recipes:recipesView,qr:qrView,promotions:promoView,staff:staffView,roles:rolesView,cashier:cashierFeaturesView,expenses:expensesView,kotprinter:kotPrinterView,branches:branchesView,loyalty:loyaltyView,settings:settingsView};
+    const fn=map[nav]||posView;
+    html=fn();
+  }
+  m.innerHTML=html;
+  queueSave();
+};
+
+// Safer inventory edit/save - updates immediately and persists.
+window.editIngredient=function(idx){
+  const it=inventory[idx]; if(!it) return;
+  openFormModal('Edit Ingredient',[
+    {name:'name',label:'Ingredient name',value:it.i,required:true},
+    {name:'q',label:'Quantity',type:'number',value:it.q},
+    {name:'u',label:'Unit',type:'select',value:it.u||'kg',options:['kg','liter','piece']},
+    {name:'alert',label:'Low stock warning at',type:'number',value:invAlert(it)}
+  ],d=>{
+    const q=parseFloat(d.q); const alert=parseFloat(d.alert);
+    it.i=(d.name||it.i).trim();
+    it.q=Number.isFinite(q)?q:0;
+    it.u=d.u||'kg';
+    it.alert=Number.isFinite(alert)?alert:0;
+    it.s=invStatus(it.q,it.alert);
+    toast('Ingredient updated');
+    render();
+  });
+};
+
+// Rechecked calculations: subtotal + service + SST, paid sales only.
+function calcOrderTotal(o){ const sub=subOf(o); return +(sub + sub*SERVICE + sub*TAX).toFixed(2); }
+function paidSalesTotal(list){ return (list||[]).reduce((s,r)=>s+Number(r.sales||r.total||0),0); }
+/* ---------- END FINAL GRAPH + INVENTORY ROUTE FIX PATCH ---------- */
+
 applyThemePref();
 renderNav();render();hydrated=true;
 if(dbReady){loadCloud(); setInterval(loadCloudSilent,6000);}
