@@ -666,7 +666,7 @@ const NAV=[
   {g:"Orders & Dining",items:[{k:"pos",l:"Orders Dashboard",badge:3},{k:"waiter",l:"Waiter Order Screen"},{k:"quickpos",l:"Quick POS Billing"},{k:"tables",l:"Tables"},{k:"bookings",l:"Table Bookings"}]},
   {g:"Reports & Analytics",items:[{k:"reports",l:"Reports"},{k:"closing",l:"Daily Closing"},{k:"analytics",l:"Restaurant Analytics"}]},
   {g:"Menu & Marketing",items:[{k:"menu",l:"Menu & Dishes"},{k:"recipes",l:"Recipe Auto Stock"},{k:"qr",l:"QR Table Ordering"},{k:"promotions",l:"Promotions"}]},
-  {g:"Management",items:[{k:"staff",l:"Staff Center"},{k:"roles",l:"Roles & Permissions"},{k:"cashier",l:"Cashier Features"},{k:"customers",l:"Customer Features"},{k:"inventory",l:"Inventory"},{k:"expenses",l:"Expenses"},{k:"barcode",l:"Barcode Scanner"},{k:"kotprinter",l:"Auto KOT Printer"},{k:"branches",l:"Multi Branch"},{k:"loyalty",l:"Loyalty Points"},{k:"settings",l:"Settings"}]},
+  {g:"Management",items:[{k:"staff",l:"Staff Center"},{k:"roles",l:"Roles & Permissions"},{k:"cashier",l:"Cashier Features"},{k:"customers",l:"Daily Summary"},{k:"inventory",l:"Inventory"},{k:"expenses",l:"Expenses"},{k:"kotprinter",l:"Auto KOT Printer"},{k:"branches",l:"Multi Branch"},{k:"loyalty",l:"Loyalty Points"},{k:"settings",l:"Settings"}]},
 ];
 const ROLE_NAV={
   waiter:["waiter","tables","bookings"],
@@ -688,11 +688,11 @@ let expenses=[];
 let promos=[];
 let customers=[];
 let branches=[];
-const PERMISSION_OPTIONS=["Full access","Orders Dashboard","Create Orders","Edit Orders","Settle Bills","Split Payment","Discount","Refund / Void","Print Receipts","Past Orders","Tables","Table Bookings","Quick POS Billing","Reports","Restaurant Analytics","Daily Closing","Expenses","Menu & Dishes","Recipe Auto Stock","QR Table Ordering","Promotions","Staff Center","Roles & Permissions","Cashier Features","Customer Features","Inventory","Barcode Scanner","Auto KOT Printer","Multi Branch","Loyalty Points","Settings"];
+const PERMISSION_OPTIONS=["Full access","Orders Dashboard","Create Orders","Edit Orders","Settle Bills","Split Payment","Discount","Refund / Void","Print Receipts","Past Orders","Tables","Table Bookings","Quick POS Billing","Reports","Restaurant Analytics","Daily Closing","Expenses","Menu & Dishes","Recipe Auto Stock","QR Table Ordering","Promotions","Staff Center","Roles & Permissions","Cashier Features","Daily Summary","Inventory","Auto KOT Printer","Multi Branch","Loyalty Points","Settings"];
 let rolePerms=[
   {role:"Admin",perms:[...PERMISSION_OPTIONS]},
   {role:"Manager",perms:PERMISSION_OPTIONS.filter(p=>!["Settings"].includes(p))},
-  {role:"Cashier",perms:["Orders Dashboard","Settle Bills","Split Payment","Discount","Refund / Void","Print Receipts","Past Orders","Reports","Daily Closing","Expenses","Menu & Dishes","Cashier Features","Customer Features"]},
+  {role:"Cashier",perms:["Orders Dashboard","Settle Bills","Split Payment","Discount","Refund / Void","Print Receipts","Past Orders","Reports","Daily Closing","Expenses","Menu & Dishes","Cashier Features","Daily Summary"]},
   {role:"Waiter",perms:["Create Orders","Tables","Table Bookings"]}
 ];
 let openRoleIndex=null;
@@ -739,7 +739,7 @@ function go(k){nav=k;renderNav();render();}
 /* ---------- ROUTER ---------- */
 function render(){
   const m=document.getElementById("main");
-  const v={pos:posView,waiter:waiterView,quickpos:quickPosView,kds:kdsView,tables:tablesView,bookings:bookingsView,service:serviceView,reports:reportView,closing:closingView,analytics:analyticsView,menu:menuView,modifiers:modifiersView,recipes:recipesView,qr:qrView,promotions:promoView,staff:staffView,roles:rolesView,cashier:cashierFeaturesView,inventory:invView,expenses:expensesView,barcode:barcodeView,kotprinter:kotPrinterView,branches:branchesView,customers:customerFeaturesView,loyalty:loyaltyView,settings:settingsView}[nav];
+  const v={pos:posView,waiter:waiterView,quickpos:quickPosView,kds:kdsView,tables:tablesView,bookings:bookingsView,service:serviceView,reports:reportView,closing:closingView,analytics:analyticsView,menu:menuView,modifiers:modifiersView,recipes:recipesView,qr:qrView,promotions:promoView,staff:staffView,roles:rolesView,cashier:cashierFeaturesView,inventory:invView,expenses:expensesView,kotprinter:kotPrinterView,branches:branchesView,customers:customerFeaturesView,loyalty:loyaltyView,settings:settingsView}[nav];
   m.innerHTML=v?v():"";
   queueSave();
 }
@@ -988,8 +988,8 @@ function invView(){
   panelTable(["Ingredient","Stock","Unit","Low Warning","Status","Adjust","Action"],inventory.map((i,idx)=>[`<b>${i.i}</b>`,i.q,i.u,`≤ ${invAlert(i)} ${i.u}`,pill(i.s==='good'?'In Stock':i.s==='low'?'Low Stock':'Out of Stock',i.s==='good'?'green':'red'),`<button class="step" onclick="adjStock(${idx},-1)">−</button> <button class="step" onclick="adjStock(${idx},1)">+</button>`,`<button class="chip" onclick="editIngredient(${idx})">Edit</button>`]));
 }
 function adjStock(idx,d){const it=inventory[idx];it.q=Math.max(0,Number(it.q||0)+d);it.alert=invAlert(it);it.s=invStatus(it.q,it.alert);render();}
-function addIngredient(){openFormModal('Add Ingredient',[{name:'name',label:'Ingredient name'},{name:'q',label:'Quantity',type:'number',value:10},{name:'u',label:'Unit',value:'kg',placeholder:'kg / L / pcs'},{name:'alert',label:'Low stock warning at',type:'number',value:5,placeholder:'Example: 5'}],d=>{if(!d.name)return;const q=parseFloat(d.q)||0;const u=d.u||'kg';const alert=parseFloat(d.alert)||0;inventory.push({i:d.name,q,u,alert,s:invStatus(q,alert)});toast(d.name+' added');});}
-function editIngredient(idx){const it=inventory[idx];openFormModal('Edit Ingredient',[{name:'name',label:'Ingredient name',value:it.i},{name:'q',label:'Quantity',type:'number',value:it.q},{name:'u',label:'Unit',value:it.u||'kg'},{name:'alert',label:'Low stock warning at',type:'number',value:invAlert(it)}],d=>{if(!d.name)return;it.i=d.name;it.q=parseFloat(d.q)||0;it.u=d.u||'kg';it.alert=parseFloat(d.alert)||0;it.s=invStatus(it.q,it.alert);toast('Ingredient updated');});}
+function addIngredient(){openFormModal('Add Ingredient',[{name:'name',label:'Ingredient name'},{name:'q',label:'Quantity',type:'number',value:10},{name:'u',label:'Unit',type:'select',value:'kg',options:['kg','liter','piece']},{name:'alert',label:'Low stock warning at',type:'number',value:5,placeholder:'Example: 5'}],d=>{if(!d.name)return;const q=parseFloat(d.q)||0;const u=d.u||'kg';const alert=parseFloat(d.alert)||0;inventory.push({i:d.name,q,u,alert,s:invStatus(q,alert)});toast(d.name+' added');});}
+function editIngredient(idx){const it=inventory[idx];openFormModal('Edit Ingredient',[{name:'name',label:'Ingredient name',value:it.i},{name:'q',label:'Quantity',type:'number',value:it.q},{name:'u',label:'Unit',type:'select',value:it.u||'kg',options:['kg','liter','piece']},{name:'alert',label:'Low stock warning at',type:'number',value:invAlert(it)}],d=>{if(!d.name)return;it.i=d.name;it.q=parseFloat(d.q)||0;it.u=d.u||'kg';it.alert=parseFloat(d.alert)||0;it.s=invStatus(it.q,it.alert);toast('Ingredient updated');});}
 
 /* ---------- EXPENSES ---------- */
 const EXPENSE_CATS=['Staff Meal','Gas','Supplies','Repair','Utilities','Rent','Delivery','Other'];
@@ -1337,8 +1337,7 @@ function qrView(){
 }
 
 /* ---------- BARCODE SCANNER ---------- */
-function barcodeView(){return head("Barcode Scanner","Keyboard/USB scanner ready. Scan or type product code and add item to cart")+`<div class="panel" style="padding:22px;max-width:740px"><label style="font-weight:900">Scan Code</label><input class="input" autofocus placeholder="Scan barcode here" value="${barcodeText}" oninput="barcodeText=this.value"><div style="margin-top:12px;display:flex;gap:8px"><button class="btn blue" onclick="barcodeAdd()">Add Scanned Item</button><button class="btn light" onclick="barcodeText='';render()">Clear</button></div><p style="color:var(--muted);font-size:13px;margin-top:12px">Demo logic: code 1001 adds Chicken Biryani, 1002 adds BBQ, 1003 adds Drink.</p></div>`;}
-function barcodeAdd(){const map={1001:5,1002:1,1003:14};const id=map[barcodeText]||5;addQuick(id);barcodeText='';go('quickpos');}
+// Barcode Scanner removed from production POS.
 
 /* ---------- MULTI BRANCH ---------- */
 function branchesView(){const total=branches.reduce((s,b)=>s+b.sales,0);return head("Multi Branch","Branch performance and online/offline status",'<button class="btn blue" onclick="addBranch()">+ Add Branch</button>')+`<div class="stats"><div class="stat"><small>Branches</small><h2>${branches.length}</h2></div><div class="stat"><small>Total Branch Sales</small><h2>${rm(total)}</h2></div><div class="stat"><small>Online</small><h2>${branches.filter(b=>b.status==='Online').length}</h2></div><div class="stat"><small>Offline</small><h2>${branches.filter(b=>b.status!=='Online').length}</h2></div></div>`+panelTable(["Branch","Orders","Sales","Status"],branches.map((b,i)=>[`<b>${b.n}</b>`,b.orders,rm(b.sales),`<span class="pill ${b.status==='Online'?'green-pill':'red-pill'}" onclick="branches[${i}].status=branches[${i}].status==='Online'?'Offline':'Online';render()" style="cursor:pointer">${b.status}</span>`]));}
@@ -1346,8 +1345,8 @@ function addBranch(){openFormModal('Add Branch',[{name:'n',label:'Branch name'}]
 
 /* ---------- ROLES / PERMISSIONS ---------- */
 function rolePermArray(r){
-  if(Array.isArray(r.perms)) return r.perms;
-  return String(r.perms||'').split(',').map(x=>x.trim()).filter(Boolean);
+  const arr=Array.isArray(r.perms)?r.perms:String(r.perms||'').split(',').map(x=>x.trim()).filter(Boolean);
+  return arr.map(p=>p==='Customer Features'?'Daily Summary':p).filter(p=>PERMISSION_OPTIONS.includes(p));
 }
 function rolePermPreview(r){
   const arr=rolePermArray(r);
@@ -1486,7 +1485,7 @@ function initSupabase(){
   return true;
 }
 function appState(){
-  return {restaurantName,logoImg,role,MENU,orders,salesLog,seq,selNo,tables,bookings,serviceReqs,staff,inventory,expenses,promos,customers,branches,rolePerms,barcodeText,savedQRCodes};
+  return {restaurantName,logoImg,role,MENU,orders,salesLog,seq,selNo,tables,bookings,serviceReqs,staff,inventory,expenses,promos,customers,branches,rolePerms,savedQRCodes};
 }
 function applyState(s){
   if(!s||typeof s!=="object")return;
@@ -1507,8 +1506,7 @@ function applyState(s){
   promos=Array.isArray(s.promos)?s.promos:promos;
   customers=Array.isArray(s.customers)?s.customers:customers;
   branches=Array.isArray(s.branches)?s.branches:branches;
-  rolePerms=Array.isArray(s.rolePerms)?s.rolePerms:rolePerms;
-  barcodeText=s.barcodeText||barcodeText;
+  rolePerms=Array.isArray(s.rolePerms)?s.rolePerms:rolePerms; rolePerms=rolePerms.map(r=>({...r,perms:rolePermArray(r)}));
   savedQRCodes=Array.isArray(s.savedQRCodes)?s.savedQRCodes:savedQRCodes;
 }
 async function loadCloud(){
@@ -1589,16 +1587,55 @@ function cashierFeaturesView(){
   const cardTotal=todaySalesByType.filter(x=>['Card','Debit Card'].includes(x.name)).reduce((a,x)=>a+x.total,0) || cashierShift.card || 0;
   const qrTotal=todaySalesByType.filter(x=>['QR','TNG'].includes(x.name)).reduce((a,x)=>a+x.total,0) || cashierShift.qr || 0;
   return head('Cashier Features','Payment method settings and today collection summary','<button class="btn dark" onclick="go(\'closing\')">Daily Closing</button>')+
-`<div class="stats"><div class="stat"><small>Cash</small><h2>${rm(cashTotal)}</h2></div><div class="stat"><small>Card / Debit</small><h2>${rm(cardTotal)}</h2></div><div class="stat"><small>QR / TNG</small><h2>${rm(qrTotal)}</h2></div><div class="stat"><small>Expenses</small><h2 style="color:var(--red)">${rm(todayExpenseTotal())}</h2></div></div>
+`<div class="stats"><div class="stat"><small>Cash</small><h2>${rm(cashTotal)}</h2></div><div class="stat"><small>Card / Debit</small><h2>${rm(cardTotal)}</h2></div><div class="stat"><small>QR / TNG</small><h2>${rm(qrTotal)}</h2></div><div class="stat"><small>Expenses</small><h2 style="color:var(--red)">${rm(expenseSum(todayExpenseRows()))}</h2></div></div>
 <div class="grid3" style="grid-template-columns:1fr 1fr"><section class="panel" style="padding:18px"><h3>Payment Methods</h3><div style="display:grid;gap:10px;margin-top:14px">${paymentMethods.map((p,i)=>`<div style="display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;border-bottom:1px solid var(--line);padding:10px 0"><b>${p.name}</b><button class="chip" onclick="editPaymentMethod(${i})">Edit</button><button class="pill ${p.active?'green-pill':'red-pill'}" onclick="paymentMethods[${i}].active=!paymentMethods[${i}].active;render()" style="border:0;cursor:pointer">${p.active?'Active':'Off'}</button></div>`).join('')}</div></section>
 <section class="panel" style="padding:18px"><h3>Today Collection Breakdown</h3><div style="display:grid;gap:10px;margin-top:14px">${todaySalesByType.map(x=>`<div style="display:flex;justify-content:space-between;border-bottom:1px solid var(--line);padding:10px 0"><b>${x.name}</b><span>${rm(x.total)}</span></div>`).join('')}</div><p style="color:var(--muted);font-size:13px;margin-top:14px">Split Payment, Discount, Refund and Void will appear inside the selected order bill summary.</p></section></div>`;}
 function editPaymentMethod(i){
   const p=paymentMethods[i];
   openFormModal('Edit Payment Method',[{name:'name',label:'Payment method name',value:p.name},{name:'active',label:'Status',type:'select',value:p.active?'Active':'Off',options:['Active','Off']}],d=>{p.name=(d.name||p.name).trim();p.active=d.active==='Active';toast('Payment method updated');});
 }
-function customerFeaturesView(){return head('Customer Features','Customer database, WhatsApp receipt, credit/due, tags and membership')+
-`<div class="stats" style="grid-template-columns:repeat(4,1fr)"><div class="stat"><small>Customers</small><h2>${customers.length}</h2></div><div class="stat"><small>VIP</small><h2>${customers.filter(c=>c.l==='VIP').length}</h2></div><div class="stat"><small>Credit/Due</small><h2>${rm(260)}</h2></div><div class="stat"><small>WhatsApp Receipts</small><h2>Ready</h2></div></div>`+
-panelTable(['Customer','Phone','Tier','Tags','Action'],customers.map((c,i)=>[`<b>${c.n}</b>`,c.p,pill(c.l,c.l==='VIP'?'blue':c.l==='Gold'?'green':''),customerTags.slice(0,2+(i%3)).map(x=>`<span class="pill">${x}</span>`).join(' '),`<button class="chip" onclick="sendWhatsappReceipt(${i})">WhatsApp</button> <button class="chip" onclick="editCustomer(${i})">Edit</button>`]));}
+function customerFeaturesView(){
+  const key=todayKey();
+  const paid=salesLog.filter(r=>normalizeSaleKey(r.key)===key);
+  const todayExp=todayExpenseRows();
+  const saleBy=(names)=>paid.filter(r=>names.includes(r.method||r.payment||r.pay||'Cash')).reduce((sum,r)=>sum+Number(r.sales||r.total||0),0);
+  const expBy=(names)=>todayExp.filter(e=>names.includes(e.method||'Cash')).reduce((sum,e)=>sum+Number(e.amount||0),0);
+  const cashSale=saleBy(['Cash']);
+  const tngSale=saleBy(['TNG']);
+  const qrSale=saleBy(['QR']);
+  const debitSale=saleBy(['Debit Card','Card','Credit Card']);
+  const totalSale=paid.reduce((sum,r)=>sum+Number(r.sales||r.total||0),0);
+  const cashExp=expBy(['Cash']);
+  const qrExp=expBy(['QR','TNG']);
+  const debitExp=expBy(['Debit Card','Card','Credit Card']);
+  const totalExp=expenseSum(todayExp);
+  const paidOrders=paid.length;
+  const unpaidOrders=orders.filter(o=>o.status!=='Paid').length;
+  return head('Daily Sales & Expense Summary','Today payment collection, expenses, net cash and order count',`<button class="btn dark" onclick="go('closing')">Daily Closing</button><button class="btn blue" onclick="go('expenses')">Add/View Expenses</button>`)+
+`<div class="stats" style="grid-template-columns:repeat(4,1fr)">
+  <div class="stat"><small>Cash Sale</small><h2>${rm(cashSale)}</h2></div>
+  <div class="stat"><small>TNG Sale</small><h2>${rm(tngSale)}</h2></div>
+  <div class="stat"><small>QR Sale</small><h2>${rm(qrSale)}</h2></div>
+  <div class="stat"><small>Debit/Card Sale</small><h2>${rm(debitSale)}</h2></div>
+</div>
+<div class="stats" style="grid-template-columns:repeat(4,1fr);margin-top:12px">
+  <div class="stat"><small>Total Sales</small><h2>${rm(totalSale)}</h2></div>
+  <div class="stat"><small>Total Expenses</small><h2 style="color:var(--red)">${rm(totalExp)}</h2></div>
+  <div class="stat"><small>Net Cash</small><h2>${rm(cashSale-cashExp)}</h2></div>
+  <div class="stat"><small>Paid / Unpaid Orders</small><h2>${paidOrders} / ${unpaidOrders}</h2></div>
+</div>
+<div class="grid3" style="grid-template-columns:1fr 1fr;margin-top:16px">
+  <section class="panel" style="padding:18px"><h3>Today Sales by Payment</h3>${panelTable(['Payment Method','Amount'],[
+    ['Cash',rm(cashSale)],['TNG',rm(tngSale)],['QR',rm(qrSale)],['Debit/Card',rm(debitSale)],['Total',`<b>${rm(totalSale)}</b>`]
+  ])}</section>
+  <section class="panel" style="padding:18px"><h3>Today Expenses by Payment</h3>${panelTable(['Payment Method','Amount'],[
+    ['Cash Expense',rm(cashExp)],['QR/TNG Expense',rm(qrExp)],['Debit/Card Expense',rm(debitExp)],['Total Expense',`<b>${rm(totalExp)}</b>`]
+  ])}</section>
+</div>
+<section class="panel" style="padding:18px;margin-top:16px"><h3>Daily Order Summary</h3>${panelTable(['Metric','Value'],[
+  ['Total Orders Today',paidOrders+unpaidOrders],['Paid Orders',paidOrders],['Unpaid Orders',unpaidOrders],['Refund Amount',rm(0)],['Discount Amount',rm(0)]
+])}</section>`;
+}
 function sendWhatsappReceipt(i){toast('WhatsApp receipt prepared for '+customers[i].n);}
 function modifiersView(){const cats=Object.keys(modifiers); return head('Kitchen Notes + Modifiers','Use preset notes and add-ons. These notes will print on KOT.')+
 `<div class="grid3">${cats.map(c=>`<section class="panel" style="padding:16px"><h3>${c}</h3><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">${modifiers[c].map(x=>`<span class="pill blue-pill">${x}</span>`).join('')}</div><button class="btn light" style="margin-top:14px" onclick="addModifier('${c}')">+ Add ${c}</button></section>`).join('')}</div>
