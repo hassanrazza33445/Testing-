@@ -738,10 +738,21 @@ function render(){
 }
 
 /* ---------- POS ---------- */
+function todayKey(){const dt=new Date();return dt.getFullYear()+"-"+(dt.getMonth()+1)+"-"+dt.getDate();}
+function todayOrderStats(){
+  const key=todayKey();
+  const paidToday=salesLog.filter(r=>r.key===key);
+  const openOrders=orders;
+  const totalOrders=openOrders.length + paidToday.length;
+  const dineOrders=openOrders.filter(o=>o.type==="dine").length + paidToday.filter(r=>r.type==="dine").length;
+  const takeOrders=openOrders.filter(o=>o.type==="take").length + paidToday.filter(r=>r.type==="take").length;
+  const deliveryOrders=openOrders.filter(o=>o.type==="delivery").length + paidToday.filter(r=>r.type==="delivery").length;
+  const todaySales=paidToday.reduce((s,r)=>s+Number(r.sales||0),0);
+  return {totalOrders,dineOrders,takeOrders,deliveryOrders,todaySales};
+}
 function posView(){
   const running=orders;
-  const dine=running.filter(o=>o.type==="dine").length, take=running.filter(o=>o.type==="take").length;
-  const todaySales=orders.reduce((s,o)=>s+totals(o).total,0);
+  const stats=todayOrderStats();
   const sel=orders.find(o=>o.no===selNo);
   return `
   <div class="top-head">
@@ -752,10 +763,10 @@ function posView(){
     </div>
   </div>
   <div class="stats">
-    <div class="stat"><small>Running Orders</small><h2>${running.length}</h2><div class="trend up">▲ live</div></div>
-    <div class="stat"><small>Dine-In</small><h2>${dine}</h2></div>
-    <div class="stat"><small>Takeaway</small><h2>${take}</h2></div>
-    <div class="stat ${role==='waiter'?'hide-cashier':''}"><small>Today Sales</small><h2>${rm(todaySales)}</h2><div class="trend up">▲ 8.2%</div></div>
+    <div class="stat"><small>Total Orders</small><h2>${stats.totalOrders}</h2><div class="trend up">${running.length} running</div></div>
+    <div class="stat"><small>Total Dine-In Orders</small><h2>${stats.dineOrders}</h2></div>
+    <div class="stat"><small>Total Takeaway Orders</small><h2>${stats.takeOrders}</h2></div>
+    <div class="stat ${role==='waiter'?'hide-cashier':''}"><small>Total Sales</small><h2>${rm(stats.todaySales)}</h2><div class="trend up">Paid orders only</div></div>
   </div>
   <div class="pos-grid">
     <section class="panel">
@@ -833,7 +844,15 @@ function savePaidSale(o,method){
   o.status='Paid';
   if(!o.saleSaved){
     const dt=new Date();
-    salesLog.push({key:dt.getFullYear()+"-"+(dt.getMonth()+1)+"-"+dt.getDate(), sales:totals(o).total, method:o.pay});
+    salesLog.push({
+      key:dt.getFullYear()+"-"+(dt.getMonth()+1)+"-"+dt.getDate(),
+      sales:totals(o).total,
+      method:o.pay,
+      type:o.type,
+      no:o.no,
+      table:o.table || '',
+      items:o.items.reduce((s,i)=>s+i.qty,0)
+    });
     o.saleSaved=true;
   }
 }
@@ -843,7 +862,7 @@ function showPaymentPopup(no,afterComplete=false){
   if(!methods.length){toast('No active payment method. Enable one from Cashier Features.');return;}
   const t=totals(o);
   const old=document.getElementById('paymentModal'); if(old)old.remove();
-  const html=`<div class="modal-overlay show" id="paymentModal"><div class="small-modal" style="max-width:560px">
+  const html=`<div class="modal-overlay show" id="paymentModal"><div class="small-modal" style="max-width:580px">
     <div class="m-head"><h3>Choose Payment Method</h3><button class="x" onclick="document.getElementById('paymentModal').remove()">×</button></div>
     <div style="padding:18px">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
@@ -851,7 +870,7 @@ function showPaymentPopup(no,afterComplete=false){
         <div class="mini-card"><small>Total Payable</small><b>${rm(t.total)}</b></div>
       </div>
       <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px">
-        ${methods.map(m=>`<button class="btn blue" style="padding:16px" onclick="confirmPayment('${o.no}','${m.replace(/'/g,\"\'\")}',${afterComplete})">${m}</button>`).join('')}
+        ${methods.map(m=>`<button class="btn blue" style="padding:16px" onclick="confirmPayment('${o.no}','${m.replace(/'/g,"\\'")}',${afterComplete})">${m}</button>`).join('')}
       </div>
       <p style="color:var(--muted);font-size:12px;margin-top:14px">Payment options come from Cashier Features. Disable/enable options there.</p>
     </div>
@@ -862,8 +881,36 @@ function confirmPayment(no,method,afterComplete=false){
   const o=orders.find(x=>x.no===no); if(!o)return;
   savePaidSale(o,method);
   const pm=document.getElementById('paymentModal'); if(pm)pm.remove();
-  if(afterComplete){orders=orders.filter(x=>x.no!==no);selNo=orders[0]?orders[0].no:null;toast(no+' paid by '+method+' and completed');}
-  else{toast(no+' paid by '+method);}
+  showAfterPaymentPopup(no,method,afterComplete);
+}
+function showAfterPaymentPopup(no,method,afterComplete=false){
+  const o=orders.find(x=>x.no===no);
+  const old=document.getElementById('afterPaymentModal'); if(old)old.remove();
+  const html=`<div class="modal-overlay show" id="afterPaymentModal"><div class="small-modal" style="max-width:520px">
+    <div class="m-head"><h3>Payment Done</h3><button class="x" onclick="finishPayment('${no}',${afterComplete},false)">×</button></div>
+    <div style="padding:18px;text-align:center">
+      <div style="font-size:38px;margin-bottom:8px">✅</div>
+      <h2 style="margin-bottom:6px">${no} paid by ${method}</h2>
+      <p style="color:var(--muted);margin-bottom:18px">Do you want to print the bill?</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <button class="btn light" onclick="finishPayment('${no}',${afterComplete},false)">Done</button>
+        <button class="btn green" onclick="finishPayment('${no}',${afterComplete},true)">Print Bill</button>
+      </div>
+    </div>
+  </div></div>`;
+  document.body.insertAdjacentHTML('beforeend',html);
+}
+function finishPayment(no,afterComplete=false,doPrint=false){
+  const o=orders.find(x=>x.no===no);
+  if(doPrint && o) printReceipt(no);
+  const ap=document.getElementById('afterPaymentModal'); if(ap)ap.remove();
+  if(afterComplete){
+    orders=orders.filter(x=>x.no!==no);
+    selNo=orders[0]?orders[0].no:null;
+    toast(no+' completed');
+  }else{
+    toast(no+' settled');
+  }
   render();
 }
 function settle(no){showPaymentPopup(no,false);}
@@ -1225,7 +1272,7 @@ function initSupabase(){
   return true;
 }
 function appState(){
-  return {restaurantName,logoImg,role,MENU,orders,seq,selNo,tables,bookings,serviceReqs,staff,inventory,promos,customers,branches,rolePerms,barcodeText};
+  return {restaurantName,logoImg,role,MENU,orders,salesLog,seq,selNo,tables,bookings,serviceReqs,staff,inventory,promos,customers,branches,rolePerms,barcodeText};
 }
 function applyState(s){
   if(!s||typeof s!=="object")return;
@@ -1234,6 +1281,7 @@ function applyState(s){
   role=s.role||role;
   MENU=Array.isArray(s.MENU)?s.MENU:MENU;
   orders=Array.isArray(s.orders)?s.orders:orders;
+  salesLog=Array.isArray(s.salesLog)?s.salesLog:salesLog;
   seq=s.seq||seq;
   selNo=s.selNo||orders[0]?.no||selNo;
   tables=Array.isArray(s.tables)?s.tables:tables;
