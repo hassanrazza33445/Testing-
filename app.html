@@ -738,10 +738,10 @@ function render(){
 }
 
 /* ---------- POS ---------- */
-function todayKey(){const dt=new Date();return dt.getFullYear()+"-"+(dt.getMonth()+1)+"-"+dt.getDate();}
+function todayKey(){return localDateKey(new Date());}
 function todayOrderStats(){
   const key=todayKey();
-  const paidToday=salesLog.filter(r=>r.key===key);
+  const paidToday=salesLog.filter(r=>normalizeSaleKey(r.key)===key);
   const openOrders=orders;
   const totalOrders=openOrders.length + paidToday.length;
   const dineOrders=openOrders.filter(o=>o.type==="dine").length + paidToday.filter(r=>r.type==="dine").length;
@@ -845,7 +845,7 @@ function savePaidSale(o,method){
   if(!o.saleSaved){
     const dt=new Date();
     salesLog.push({
-      key:dt.getFullYear()+"-"+(dt.getMonth()+1)+"-"+dt.getDate(),
+      key:localDateKey(dt),
       sales:totals(o).total,
       method:o.pay,
       type:o.type,
@@ -949,12 +949,15 @@ function promoView(){
 }
 
 /* ---------- REPORTS ---------- */
-let rPreset="today",rFrom="2026-05-25",rTo="2026-06-08";
-const TODAY=new Date(2026,5,8);
-const addDays=(d,n)=>{const x=new Date(d);x.setDate(x.getDate()+n);return x;};
-function salesFor(date){const key=date.getFullYear()+"-"+(date.getMonth()+1)+"-"+date.getDate();const rows=salesLog.filter(r=>r.key===key);return{orders:rows.length,sales:Math.round(rows.reduce((s,r)=>s+r.sales,0)*100)/100};}
-function rangeFor(k){const t=TODAY;if(k==="today")return[t,t];if(k==="yesterday"){const y=addDays(t,-1);return[y,y];}if(k==="week")return[addDays(t,-6),t];if(k==="thismonth")return[new Date(t.getFullYear(),t.getMonth(),1),t];if(k==="lastmonth")return[new Date(t.getFullYear(),t.getMonth()-1,1),new Date(t.getFullYear(),t.getMonth(),0)];if(k==="custom")return[new Date(rFrom),new Date(rTo)];return[t,t];}
-function buildRange(s,e){const out=[];let d=new Date(s);while(d<=e){out.push({label:d.getDate()+"/"+(d.getMonth()+1),dow:d.toLocaleDateString('en',{weekday:'short'}),...salesFor(d)});d=addDays(d,1);}return out;}
+let rPreset="today",rFrom=localDateKey(addDays(new Date(),-14)),rTo=localDateKey(new Date());
+function localDateKey(date){const d=new Date(date);return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
+function shortDateLabel(date){const d=new Date(date);return d.getDate()+"/"+(d.getMonth()+1);}
+const addDays=(d,n)=>{const x=new Date(d);x.setHours(0,0,0,0);x.setDate(x.getDate()+n);return x;};
+function reportToday(){const t=new Date();t.setHours(0,0,0,0);return t;}
+function normalizeSaleKey(k){if(!k)return "";const parts=String(k).split("-");if(parts.length!==3)return String(k);return parts[0]+"-"+String(parts[1]).padStart(2,"0")+"-"+String(parts[2]).padStart(2,"0");}
+function salesFor(date){const key=localDateKey(date);const rows=salesLog.filter(r=>normalizeSaleKey(r.key)===key);return{orders:rows.length,sales:Math.round(rows.reduce((s,r)=>s+Number(r.sales||0),0)*100)/100};}
+function rangeFor(k){const t=reportToday();if(k==="today")return[t,t];if(k==="yesterday"){const y=addDays(t,-1);return[y,y];}if(k==="week")return[addDays(t,-6),t];if(k==="thismonth")return[new Date(t.getFullYear(),t.getMonth(),1),t];if(k==="lastmonth")return[new Date(t.getFullYear(),t.getMonth()-1,1),new Date(t.getFullYear(),t.getMonth(),0)];if(k==="custom")return[new Date(rFrom),new Date(rTo)];return[t,t];}
+function buildRange(s,e){const out=[];let d=new Date(s);d.setHours(0,0,0,0);const end=new Date(e);end.setHours(0,0,0,0);while(d<=end){const day=salesFor(d);out.push({dateKey:localDateKey(d),label:shortDateLabel(d),dow:d.toLocaleDateString('en',{weekday:'short'}),...day,avg:day.orders?day.sales/day.orders:0});d=addDays(d,1);}return out;}
 function reportView(){
   const [s,e]=rangeFor(rPreset),data=buildRange(s,e);
   const tS=data.reduce((a,d)=>a+d.sales,0),tO=data.reduce((a,d)=>a+d.orders,0),avg=tO?tS/tO:0;
@@ -963,18 +966,18 @@ function reportView(){
   return head("Sales Report",restaurantName+" · "+data.length+" day(s)",'<button class="btn dark" onclick="downloadCSV(\'sales-report\',[\'Date\',\'Day\',\'Orders\',\'Sales\'],buildRange(...rangeFor(rPreset)).map(d=>[d.label,d.dow,d.orders,d.sales]))">Download Report</button>')+
   `<div class="panel" style="padding:13px;margin-bottom:16px;display:flex;flex-wrap:wrap;gap:8px;align-items:center">📅 ${P.map(([k,l])=>`<button class="chip ${rPreset===k?'active':''}" onclick="rPreset='${k}';render()">${l}</button>`).join("")}
     ${rPreset==="custom"?`<input type="date" class="input" style="width:auto" value="${rFrom}" onchange="rFrom=this.value;render()"><span style="color:var(--muted)">to</span><input type="date" class="input" style="width:auto" value="${rTo}" onchange="rTo=this.value;render()">`:''}</div>
-  <div class="stats"><div class="stat"><small>Total Sales</small><h2>${rm(tS)}</h2></div><div class="stat"><small>Total Orders</small><h2>${tO}</h2></div><div class="stat"><small>Avg Order</small><h2>${rm(avg)}</h2></div><div class="stat"><small>Best Day</small><h2>${best?rm(best.sales):'—'}</h2></div></div>
+  <div class="stats"><div class="stat"><small>Total Sales</small><h2>${rm(tS)}</h2></div><div class="stat"><small>Total Orders</small><h2>${tO}</h2></div><div class="stat"><small>Avg Order</small><h2>${rm(avg)}</h2></div><div class="stat"><small>Best Day</small><h2>${best&&best.sales>0?best.label+" · "+rm(best.sales):'—'}</h2></div></div>
   <div class="panel" style="padding:18px;margin-bottom:16px"><b>${data.length===1?'Day total':'Daily Sales'}</b>
     <div style="display:flex;align-items:flex-end;gap:6px;height:170px;margin-top:12px">${data.map(d=>`<div title="${rm(d.sales)}" style="flex:1;border-radius:6px 6px 0 0;min-width:8px;background:${best&&d.label===best.label?'var(--blue)':'#9db4ff'};height:${Math.max(d.sales/max*100,4)}%"></div>`).join("")}</div>
     <div style="display:flex;gap:6px;margin-top:6px;font-size:9px;color:#8d877c">${data.map(d=>`<span style="flex:1;text-align:center">${d.label}</span>`).join("")}</div></div>
-  ${panelTable(["Date","Day","Orders","Avg/Order","Sales"],[...data].reverse().map(d=>[d.label,d.dow,d.orders,rm(d.sales/d.orders),`<b>${rm(d.sales)}</b>`]))}`;
+  ${panelTable(["Date","Day","Orders","Avg/Order","Sales"],[...data].reverse().map(d=>[d.label,d.dow,d.orders,rm(d.avg||0),`<b>${rm(d.sales)}</b>`]))}`;
 }
 /* ---------- ANALYTICS ---------- */
 function analyticsView(){
   const [s,e]=rangeFor("week"),data=buildRange(s,e);
   const tS=data.reduce((a,d)=>a+d.sales,0),tO=data.reduce((a,d)=>a+d.orders,0),max=Math.max(...data.map(d=>d.orders),1);
   return head("Restaurant Analytics",restaurantName+" · Last 7 days")+
-  `<div class="stats"><div class="stat"><small>Total Revenue</small><h2>${rm(tS)}</h2></div><div class="stat"><small>Order Count</small><h2>${tO}</h2></div><div class="stat"><small>Avg Order</small><h2>${rm(tS/tO)}</h2></div><div class="stat"><small>Peak Time</small><h2>8 PM</h2></div></div>
+  `<div class="stats"><div class="stat"><small>Total Revenue</small><h2>${rm(tS)}</h2></div><div class="stat"><small>Order Count</small><h2>${tO}</h2></div><div class="stat"><small>Avg Order</small><h2>${rm(tO?tS/tO:0)}</h2></div><div class="stat"><small>Peak Time</small><h2>8 PM</h2></div></div>
   <div class="panel" style="padding:18px;margin-bottom:16px"><b>Orders per day</b><div style="display:flex;align-items:flex-end;gap:6px;height:160px;margin-top:12px">${data.map(d=>`<div title="${d.orders} orders" style="flex:1;border-radius:6px 6px 0 0;background:#9db4ff;height:${Math.max(d.orders/max*100,4)}%"></div>`).join("")}</div></div>
   ${panelTable(["Order Type","Share","Revenue"],[["🍽 Dine-In","55%",`<b>${rm(tS*0.55)}</b>`],["🛵 Delivery","25%",`<b>${rm(tS*0.25)}</b>`],["🛍 Pick-up","20%",`<b>${rm(tS*0.20)}</b>`]])}`;
 }
