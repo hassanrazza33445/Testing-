@@ -2613,33 +2613,39 @@ function setBranchMulti(stateName,id,on){
 
 /* ---- EasyEat-style HQ filter dropdowns (Outlet multi-select + Date range) ---- */
 let _hqOpenDrop=null;
+function hqCloseMenus(){
+  document.querySelectorAll('.hqdrop.open').forEach(d=>d.classList.remove('open'));
+  const live=document.getElementById('hqLiveMenu'); if(live) live.remove();
+  _hqOpenDrop=null;
+}
 function hqToggleDrop(id){
   const el=document.getElementById(id); if(!el)return;
   const willOpen=!el.classList.contains('open');
-  document.querySelectorAll('.hqdrop.open').forEach(d=>d.classList.remove('open'));
-  if(willOpen){ el.classList.add('open'); _hqOpenDrop=id; hqPositionMenu(el); } else { _hqOpenDrop=null; }
+  hqCloseMenus();
+  if(willOpen){ el.classList.add('open'); _hqOpenDrop=id; hqOpenMenu(el); }
   if(window.event) window.event.stopPropagation();
 }
-function hqPositionMenu(el){
-  const btn=el.querySelector('.hqdrop-btn'), menu=el.querySelector('.hqdrop-menu');
-  if(!btn||!menu) return;
+function hqOpenMenu(el){
+  const btn=el.querySelector('.hqdrop-btn'), src=el.querySelector('.hqdrop-menu');
+  if(!btn||!src) return;
+  const old=document.getElementById('hqLiveMenu'); if(old) old.remove();
+  const menu=src.cloneNode(true);          // render at body level so nothing clips/hides it
+  menu.id='hqLiveMenu';
+  menu.classList.add('hqdrop-menu-live');
   menu.style.display='block';
+  if(document.body.classList.contains('light')) menu.classList.add('lightmenu');
+  document.body.appendChild(menu);
   const r=btn.getBoundingClientRect();
   const mw=Math.max(menu.offsetWidth,230), vw=window.innerWidth, vh=window.innerHeight;
-  let left=r.left;
-  if(left+mw>vw-12) left=vw-12-mw;
-  if(left<12) left=12;
-  let top=r.bottom+7;
-  const mh=menu.offsetHeight;
-  if(top+mh>vh-12) top=Math.max(12,r.top-7-mh);
-  menu.style.position='fixed';
-  menu.style.right='auto';
-  menu.style.left=left+'px';
-  menu.style.top=top+'px';
+  let left=r.left; if(left+mw>vw-12) left=vw-12-mw; if(left<12) left=12;
+  let top=r.bottom+7; const mh=menu.offsetHeight; if(top+mh>vh-12) top=Math.max(12,r.top-7-mh);
+  menu.style.position='fixed'; menu.style.right='auto'; menu.style.left=left+'px'; menu.style.top=top+'px'; menu.style.zIndex='99999';
 }
-function hqReopenDrop(){ if(_hqOpenDrop){ const el=document.getElementById(_hqOpenDrop); if(el){ el.classList.add('open'); hqPositionMenu(el); } } }
-document.addEventListener('click',e=>{ if(!e.target.closest('.hqdrop')){ document.querySelectorAll('.hqdrop.open').forEach(d=>d.classList.remove('open')); _hqOpenDrop=null; } });
-window.addEventListener('resize',()=>{ if(_hqOpenDrop){ const el=document.getElementById(_hqOpenDrop); if(el) hqPositionMenu(el); } });
+function hqReopenDrop(){ if(_hqOpenDrop){ const el=document.getElementById(_hqOpenDrop); if(el){ el.classList.add('open'); hqOpenMenu(el); } } }
+function hqPickDate(r){ hqCloseMenus(); setSalesReportRange(r); }
+document.addEventListener('click',e=>{ if(!e.target.closest('.hqdrop') && !e.target.closest('#hqLiveMenu')) hqCloseMenus(); });
+window.addEventListener('resize',hqCloseMenus);
+window.addEventListener('scroll',hqCloseMenus,true);
 
 function outletDropdown(stateName){
   const sel = stateName==='analytics' ? hqAnalyticsBranches : hqReportBranches;
@@ -2655,7 +2661,7 @@ function dateDropdown(){
   const opts=[['today','Today'],['yesterday','Yesterday'],['lastweek','Last Week'],['last7','Last 7 Days'],['last30','Last 30 Days'],['month','This Month'],['lastmonth','Last Month'],['custom','Custom Date']];
   const cur=(opts.find(o=>o[0]===salesReportRange)||opts[0])[1];
   const id='drop_date';
-  const items=opts.map(o=>`<div class="hqdrop-item ${salesReportRange===o[0]?'active':''}" onclick="_hqOpenDrop=null;setSalesReportRange('${o[0]}')">${o[1]}</div>`).join('');
+  const items=opts.map(o=>`<div class="hqdrop-item ${salesReportRange===o[0]?'active':''}" onclick="hqPickDate('${o[0]}')">${o[1]}</div>`).join('');
   return `<div class="hqdrop" id="${id}"><button class="hqdrop-btn" onclick="hqToggleDrop('${id}')">${cur}<span class="caret">▼</span></button><div class="hqdrop-menu" style="min-width:190px">${items}</div></div>`;
 }
 function hqActions(stateName,opts={}){
