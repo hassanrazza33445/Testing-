@@ -84,7 +84,7 @@
   .bchk:has(input:checked){background:rgba(212,175,55,.2);border-color:#d4af37}
   .branch-chip-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
   .branch-filter{display:inline-flex;align-items:center;gap:10px;margin:0 0 16px;padding:8px 14px;border:1px solid var(--line);border-radius:12px;background:var(--card)}
-  .branch-filter>label{font-size:11px;font-weight:900;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin:0}
+  .branch-filter>label{font-size:11px;font-weight:900;letter-spacing:.5px;text-transform:uppercase;color:#caa53a;margin:0}
   .branch-filter select{width:200px;max-width:100%;padding:8px 10px}
   /* ---- HQ top-right filter dropdowns (outlet + date) ---- */
   .hqbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
@@ -94,7 +94,7 @@
   .hqdrop-btn .caret{font-size:9px;opacity:.6;transition:.2s}
   .hqdrop.open .hqdrop-btn{border-color:#d4af37}
   .hqdrop.open .hqdrop-btn .caret{transform:rotate(180deg)}
-  .hqdrop-menu{position:absolute;top:calc(100% + 7px);right:0;min-width:240px;background:var(--card);border:1px solid var(--line);border-radius:13px;box-shadow:0 16px 44px rgba(0,0,0,.22);padding:8px;z-index:1300;display:none;max-height:360px;overflow:auto}
+  .hqdrop-menu{position:absolute;top:calc(100% + 7px);right:0;min-width:240px;max-width:calc(100vw - 40px);background:var(--card);border:1px solid var(--line);border-radius:13px;box-shadow:0 16px 44px rgba(0,0,0,.22);padding:8px;z-index:1300;display:none;max-height:360px;overflow:auto}
   .hqdrop.open .hqdrop-menu{display:block;animation:hqpop .14s ease}
   @keyframes hqpop{from{opacity:0;transform:translateY(-5px)}to{opacity:1;transform:translateY(0)}}
   .hqdrop-item{display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:9px;font-weight:700;font-size:13px;color:var(--text);cursor:pointer;white-space:nowrap}
@@ -102,6 +102,18 @@
   .hqdrop-item.active{background:rgba(212,175,55,.18);color:#caa53a}
   .hqdrop-item input{appearance:auto;width:16px;height:16px;min-width:16px;margin:0;accent-color:#d4af37;cursor:pointer;flex:none}
   .hqdrop-sep{height:1px;background:var(--line);margin:6px 4px}
+  /* ---- Promo/Discount branch dropdown (modal-safe) ---- */
+  .pbdrop{position:relative;margin-top:8px}
+  .pbdrop-btn{width:100%;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 13px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--text);font-weight:700;font-size:13px;cursor:pointer}
+  .pbdrop-btn .caret{font-size:9px;opacity:.6}
+  .pbdrop.open .pbdrop-btn{border-color:#d4af37}
+  .pbdrop.open .pbdrop-btn .caret{transform:rotate(180deg)}
+  .pbdrop-menu{display:none;margin-top:6px;border:1px solid var(--line);border-radius:11px;background:var(--card);padding:7px;max-height:240px;overflow:auto}
+  .pbdrop.open .pbdrop-menu{display:block}
+  .pbdrop-item{display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:8px;font-weight:600;font-size:13px;color:var(--text);cursor:pointer}
+  .pbdrop-item:hover{background:rgba(212,175,55,.12)}
+  .pbdrop-item input{appearance:auto;width:16px;height:16px;min-width:16px;margin:0;accent-color:#d4af37;cursor:pointer;flex:none}
+  .pbdrop-sep{height:1px;background:var(--line);margin:5px 4px}
   .detail-body{padding:17px}
   .order-info{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:15px}
   .info-box{background:#1e1e27;border:1px solid var(--line);border-radius:10px;padding:12px}
@@ -509,7 +521,17 @@
 
 
   /* ================= LIGHT LUXURY THEME (toggle) ================= */
-  body.light{background:#f7f3ea!important;color:#221d12!important}
+  body.light{background:#f7f3ea!important;color:#221d12!important;--bg:#f7f3ea;--card:#ffffff;--text:#221d12;--muted:#8a8170;--line:rgba(176,137,47,.30)}
+  body.light .mini-card{background:#fff!important;border:1px solid rgba(176,137,47,.28)!important}
+  body.light .mini-card small{color:#a59a83!important} body.light .mini-card b{color:#221d12!important}
+  body.light .hqdrop-btn{background:#fff!important;color:#221d12!important;border:1px solid rgba(176,137,47,.34)!important}
+  body.light .hqdrop-btn:hover{background:rgba(212,175,55,.08)!important}
+  body.light .hqdrop-menu{background:#fff!important;border:1px solid rgba(176,137,47,.28)!important;box-shadow:0 16px 44px rgba(120,90,20,.18)!important}
+  body.light .hqdrop-item{color:#221d12!important} body.light .hqdrop-item.active{color:#8a6d1a!important;background:rgba(212,175,55,.16)!important}
+  body.light .branch-filter{background:#fff!important;border:1px solid rgba(176,137,47,.28)!important}
+  body.light .bchk{color:#221d12!important;background:rgba(212,175,55,.08)!important;border-color:rgba(176,137,47,.34)!important}
+  body.light .pbdrop-btn{background:#fff!important;color:#221d12!important;border:1px solid rgba(176,137,47,.34)!important}
+  body.light .pbdrop-menu{background:#fff!important;border:1px solid rgba(176,137,47,.28)!important}
   body.light .topbar{background:#fffdf7!important;border-bottom:1px solid rgba(176,137,47,.28)!important;box-shadow:0 2px 14px rgba(0,0,0,.06)}
   body.light .tb-left{color:#8a6d1a!important}
   body.light .tb-badge{background:linear-gradient(135deg,#b8912f,#e3c466,#caa54e)!important;color:#241d0a!important}
@@ -1864,7 +1886,7 @@ function analyticsView(){
       ['Delivery', count?Math.round((del/Math.max(total,1))*100)+'%':'0%', rm(del)]
     ]);
 }
-function closingView(){const d=closingAutoData();return head('Daily Closing','Auto closing is locked for cashier. Owner/Admin can edit opening cash and expenses from Admin Panel.')+
+function closingView(){const d=closingAutoData();return head('Daily Closing',(currentPortal==='hq'?'HQ':currentBranchName)+' · Auto closing is locked for cashier. Owner/Admin can edit opening cash and expenses from Admin Panel.')+
 `<div class="stats"><div class="stat"><small>Opening Cash</small><h2>${rm(cashierShift.opening)}</h2></div><div class="stat"><small>Auto Total Sales</small><h2>${rm(d.totalSales)}</h2></div><div class="stat"><small>Expenses</small><h2 style="color:var(--red)">${rm(d.totalExpenses)}</h2><div class="trend down">Cash: ${rm(d.cashExpenses)}</div></div><div class="stat"><small>Expected Cash Closing</small><h2>${rm(d.expected)}</h2></div></div>
 <div class="grid3" style="grid-template-columns:1.1fr 1fr"><section class="panel" style="padding:18px"><h3>Automatic Closing Sheet</h3><div class="admin-lock">🔒 Opening cash, expenses and cash count are locked for cashier. Owner/Admin only.</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px"><div><small style="font-weight:900;color:var(--muted)">Opening Cash</small><input class="input readonly-field" readonly value="${cashierShift.opening}"></div><div><small style="font-weight:900;color:var(--muted)">Expenses</small><input class="input readonly-field" readonly value="${d.totalExpenses.toFixed(2)}"></div><div><small style="font-weight:900;color:var(--muted)">Counted Cash</small><input class="input readonly-field" readonly value="${d.actual.toFixed(2)}"></div><div><small style="font-weight:900;color:var(--muted)">Difference</small><input class="input readonly-field" readonly value="${rm(d.diff)}" style="font-weight:900;color:${d.diff<0?'var(--red)':'var(--green)'}"></div></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-top:14px"><div class="mini-card"><small>Cash Sales</small><b>${rm(d.cash)}</b></div><div class="mini-card"><small>Card Sales</small><b>${rm(d.card)}</b></div><div class="mini-card"><small>QR Sales</small><b>${rm(d.qr)}</b></div><div class="mini-card"><small>Cash Expenses</small><b>${rm(d.cashExpenses)}</b></div><div class="mini-card"><small>Other Expenses</small><b>${rm(d.nonCashExpenses)}</b></div></div><div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap"><button class="btn green" onclick="closeShiftAuto()">Close Shift Automatically</button><button class="btn light" onclick="openAdminClosingModal()">Owner/Admin Edit</button><button class="btn blue" onclick="go('expenses')">Add/View Expenses</button><button class="btn dark" onclick="window.print()">Print Closing</button>${cashierShift.closed?`<span class="pill green-pill">Closed ${cashierShift.closedAt||''}</span>`:''}</div></section>
 <section class="panel" style="padding:18px"><h3>Order Payment Summary</h3><div style="margin-top:12px;display:grid;gap:9px;max-height:330px;overflow:auto">${d.paid.length?d.paid.map(r=>`<div style="border:1px solid var(--line);border-radius:10px;padding:10px;display:flex;justify-content:space-between;gap:8px;align-items:center"><div><b>${r.no}</b><br><small>Paid · ${r.method||'Cash'} · ${r.table?'T'+r.table:typeMeta(r.type||'take').l} · ${rm(r.sales||0)}</small></div><span class="pill green-pill">Closed Sale</span></div>`).join(''):'<div class="empty">No paid orders today</div>'}</div><h3 style="margin-top:16px">Today Expenses</h3><div style="margin-top:8px;display:grid;gap:8px;max-height:180px;overflow:auto">${d.expenses.length?d.expenses.map(e=>`<div style="border:1px solid var(--line);border-radius:10px;padding:9px;display:flex;justify-content:space-between;gap:8px;align-items:center"><div><b>${e.category}</b><br><small>${e.method} · ${e.desc||'-'} · ${rm(e.amount||0)}</small></div>${e.receipt?`<button class="chip" onclick="viewExpenseReceipt('${e.id}')">Receipt</button>`:`<button class="chip" onclick="uploadExpenseReceipt('${e.id}')">Upload</button>`}</div>`).join(''):'<div class="empty">No expenses today</div>'}</div><div style="margin-top:12px;color:var(--muted);font-size:13px">Paid orders included: <b>${d.paid.length}</b><br>Unpaid orders not included: <b>${d.unpaid.length}</b></div></section></div>`;}
@@ -2731,8 +2753,29 @@ staffView=function(){
 };
 
 function branchCheckboxesHTML(selected){
-  const sel=Array.isArray(selected)?selected:['all'];
-  return `<div style="grid-column:1/-1"><label>Select Branches</label><div class="branch-chip-row"><label class="bchk"><input type="checkbox" class="promoBranch" value="all" ${sel.includes('all')?'checked':''}> All Branches</label>${branchListSafe().map(b=>`<label class="bchk"><input type="checkbox" class="promoBranch" value="${b.id}" ${sel.includes('all')||sel.includes(b.id)?'checked':''}> ${b.name}</label>`).join('')}</div></div>`;
+  const sel=Array.isArray(selected)&&selected.length?selected:['all'];
+  const all=sel.includes('all');
+  const list=branchListSafe();
+  const picked=all?list.length:sel.filter(x=>x!=='all').length;
+  const label=all?'All Branches':(picked+' Branch'+(picked>1?'es':''));
+  const items=list.map(b=>`<label class="pbdrop-item"><input type="checkbox" class="promoBranch" value="${b.id}" ${all||sel.includes(b.id)?'checked':''} onchange="pbSync()"> ${b.name}</label>`).join('');
+  return `<div style="grid-column:1/-1"><label>Select Branches</label>
+    <div class="pbdrop" id="pbdrop">
+      <button type="button" class="pbdrop-btn" onclick="this.closest('.pbdrop').classList.toggle('open')"><span id="pbLabel">${label}</span><span class="caret">▼</span></button>
+      <div class="pbdrop-menu">
+        <label class="pbdrop-item"><input type="checkbox" class="promoBranch" value="all" ${all?'checked':''} onchange="pbAllToggle(this)"> All Branches</label>
+        <div class="pbdrop-sep"></div>${items}
+      </div>
+    </div></div>`;
+}
+function pbAllToggle(cb){ if(cb.checked){ document.querySelectorAll('.promoBranch').forEach(x=>{ if(x.value!=='all') x.checked=false; }); } pbSync(); }
+function pbSync(){
+  const allCb=document.querySelector('.promoBranch[value="all"]');
+  const others=[...document.querySelectorAll('.promoBranch')].filter(x=>x.value!=='all');
+  const checked=others.filter(x=>x.checked);
+  if(checked.length && allCb) allCb.checked=false;
+  const lbl=document.getElementById('pbLabel');
+  if(lbl) lbl.textContent=((allCb&&allCb.checked)||checked.length===0)?'All Branches':(checked.length+' Branch'+(checked.length>1?'es':''));
 }
 function selectedPromoBranches(){ let vals=[...document.querySelectorAll('.promoBranch:checked')].map(x=>x.value); if(!vals.length||vals.includes('all')) return ['all']; return vals; }
 const _oldEditCouponBatch=editCoupon;
