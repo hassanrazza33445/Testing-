@@ -112,7 +112,8 @@ function quickLogin(username){
 function loginPOS(){
   const username=(document.getElementById('loginUser').value||'').trim();
   const password=(document.getElementById('loginPass').value||'').trim();
-  const u=DEMO_USERS[username];
+  const extraUsers=(()=>{try{const arr=JSON.parse(localStorage.getItem('HQ_STAFF_USERS')||'[]'); const map={}; arr.forEach(u=>{map[u.username]={password:u.password,portal:u.portal||'branch',role:u.role||'cashier',branchId:u.branchId||'subang',branchName:u.branchName||'Subang',displayName:u.displayName||u.username,pin:u.pin||'1234'};}); return map;}catch(e){return {}}})();
+  const u=DEMO_USERS[username] || extraUsers[username];
   if(!u||u.password!==password){alert('Invalid username or password');return;}
   localStorage.setItem('POS_USER',JSON.stringify({username,...u,loggedAt:new Date().toISOString()}));
   location.href='app.html';

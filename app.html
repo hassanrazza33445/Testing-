@@ -1062,7 +1062,7 @@ function expenseSum(rows=expenses){return rows.reduce((s,e)=>s+Number(e.amount||
 function expenseByMethod(methods,rows=todayExpenseRows()){return rows.filter(e=>methods.includes(e.method||'Cash')).reduce((s,e)=>s+Number(e.amount||0),0)}
 function expensesView(){
   const today=todayExpenseRows(), month=expenses.filter(e=>(e.date||'').slice(0,7)===todayISO().slice(0,7));
-  return head('Expenses','Add restaurant expenses with payment type and receipt upload','<button class="btn blue" onclick="addExpense()">+ Add Expense</button><button class="btn dark" onclick="downloadCSV(\'expenses\',[\'Date\',\'Category\',\'Description\',\'Payment Type\',\'Amount\',\'Receipt\'],expenses.map(e=>[e.date,e.category,e.desc,e.method,e.amount,e.receipt?\'Yes\':\'No\']))">Download Expenses</button>')+
+  return head('Expenses','Add restaurant expenses with payment type and receipt upload',`<button class="btn blue" onclick="addExpense()">+ Add Expense</button><button class="btn dark" onclick="downloadCSV('expenses',['Date','Branch','Category','Description','Payment Type','Amount','Receipt'],expenses.map(e=>[e.date,e.branchName,e.category,e.desc,e.method,e.amount,e.receipt?'Yes':'No']))">Download Expenses</button>`)+singleBranchSelector('expenses','Branch')+`<div class="stats"><div class="stat"><small>Today Expenses</small><h2>${rm(expenseSum(today))}</h2></div><div class="stat"><small>Cash Expenses Today</small><h2>${rm(expenseByMethod(['Cash'],today))}</h2></div><div class="stat"><small>QR/TNG/Card Today</small><h2>${rm(expenseSum(today)-expenseByMethod(['Cash'],today))}</h2></div><div class="stat"><small>This Month</small><h2>${rm(expenseSum(month))}</h2></div></div>`+panelTable(['Date','Branch','Category','Description','Payment','Amount','Receipt','Action'],list.slice().reverse().map(e=>[e.date||'-',branchNameById(e.branchId),`<b>${e.category||'Other'}</b>`,e.desc||'-',e.method||'Cash',`<b>${rm(e.amount||0)}</b>`,e.receipt?`<button class="chip" onclick="viewExpenseReceipt('${e.id}')">View</button>`:`<button class="chip" onclick="uploadExpenseReceipt('${e.id}')">Upload</button>`,`<button class="chip" onclick="editExpense('${e.id}')">Edit</button> <button class="chip" style="color:var(--red)" onclick="deleteExpense('${e.id}')">Delete</button>`]));
   `<div class="stats"><div class="stat"><small>Today Expenses</small><h2>${rm(expenseSum(today))}</h2></div><div class="stat"><small>Cash Expenses Today</small><h2>${rm(expenseByMethod(['Cash'],today))}</h2></div><div class="stat"><small>QR/TNG/Card Today</small><h2>${rm(expenseSum(today)-expenseByMethod(['Cash'],today))}</h2></div><div class="stat"><small>This Month</small><h2>${rm(expenseSum(month))}</h2></div></div>`+
   panelTable(['Date','Category','Description','Payment','Amount','Receipt','Action'],expenses.slice().reverse().map(e=>[e.date||'-',`<b>${e.category||'Other'}</b>`,e.desc||'-',e.method||'Cash',`<b>${rm(e.amount||0)}</b>`,e.receipt?`<button class="chip" onclick="viewExpenseReceipt('${e.id}')">View</button>`:`<button class="chip" onclick="uploadExpenseReceipt('${e.id}')">Upload</button>`,`<button class="chip" onclick="editExpense('${e.id}')">Edit</button> <button class="chip" style="color:var(--red)" onclick="deleteExpense('${e.id}')">Delete</button>`]));
 }
@@ -2090,7 +2090,7 @@ editCoupon=function(idx,typeOverride){
 staffView=function(){
   const today=todayKey(); const present=staff.filter(s=>s.s==='On Duty').length; const checkedOut=staff.filter(s=>s.checkoutDate===today).length; const totalHours=staff.reduce((a,s)=>a+Number(s.hours||0),0);
   const rows=staff.map((s,i)=>{let action=''; if(s.s==='On Duty'||(s.ci&&s.ci!=='-'&&!s.co)) action=`<button class="btn green" onclick="staffCheckOut(${i})">Check Out</button>`; else if(s.checkoutDate===today) action='<span class="pill green-pill">Completed Today</span>'; else action=`<button class="btn blue" onclick="staffCheckIn(${i})">Check In</button>`; return [`<b>${s.u}</b>`,s.d||'-',s.l||'Main Branch',s.ci||'-',s.co||'-',`${Number(s.hours||0).toFixed(2)} hrs`,pill(s.s||'Absent',s.s==='Absent'?'red':'green'),action];});
-  return head('Staff Center','Attendance, check-in/check-out and working hours','<button class="btn light" onclick="addStaff()">+ Add Staff</button><button class="btn dark" onclick="downloadCSV(\'staff-attendance\',[\'User\',\'Designation\',\'Location\',\'CheckIn\',\'CheckOut\',\'Hours\',\'Status\'],staff.map(s=>[s.u,s.d,s.l,s.ci||\'-\',s.co||\'-\',s.hours||0,s.s]))">Download Attendance</button>')+`<div class="stats"><div class="stat"><small>Total Staff</small><h2>${staff.length}</h2></div><div class="stat"><small>On Duty</small><h2>${present}</h2></div><div class="stat"><small>Completed Today</small><h2>${checkedOut}</h2></div><div class="stat"><small>Total Hours</small><h2>${totalHours.toFixed(2)}</h2></div></div>`+panelTable(['Staff','Role','Branch','Check In','Check Out','Hours','Status','Action'],rows);
+  return head('Staff Center','Attendance, check-in/check-out and working hours',`<button class="btn light" onclick="addStaff()">+ Add Staff</button><button class="btn dark" onclick="downloadCSV('staff-attendance',['User','Designation','Location','CheckIn','CheckOut','Hours','Status'],staff.map(s=>[s.u,s.d,s.l,s.ci||'-',s.co||'-',s.hours||0,s.s]))">Download Attendance</button>`)+`<div class="stats"><div class="stat"><small>Total Staff</small><h2>${staff.length}</h2></div><div class="stat"><small>On Duty</small><h2>${present}</h2></div><div class="stat"><small>Completed Today</small><h2>${checkedOut}</h2></div><div class="stat"><small>Total Hours</small><h2>${totalHours.toFixed(2)}</h2></div></div>`+panelTable(['Staff','Role','Branch','Check In','Check Out','Hours','Status','Action'],rows)
 };
 staffCheckIn=function(i){const s=staff[i]; if(s.checkoutDate===todayKey()){toast(s.u+' already completed today');return;} s.ci=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});s.checkInTs=Date.now();s.checkInDate=todayKey();s.co='';s.s='On Duty';toast(s.u+' checked in');render();};
 staffCheckOut=function(i){const s=staff[i]; if(!(s.s==='On Duty'||(s.ci&&s.ci!=='-'&&!s.co))){toast('Staff is not checked in');return;} s.co=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});const ms=s.checkInTs?Date.now()-Number(s.checkInTs):0;s.hours=Number(s.hours||0)+(ms?ms/3600000:0);s.checkInTs=null;s.checkoutDate=todayKey();s.s='Checked Out';toast(s.u+' checked out');render();};
@@ -2487,6 +2487,232 @@ const OLD_GO=window.go;
 window.go=function(k){ nav=k; renderNav(); render(); };
 nav=currentPortal==='hq'?'hqdashboard':(role==='waiter'?'waiter':'pos');
 /* ---------- END HQ / BRANCH LOGIN ROUTING PATCH ---------- */
+
+
+
+/* ---------- HQ MULTI-BRANCH BATCH PATCH ---------- */
+let hqReportBranches = JSON.parse(localStorage.getItem('HQ_REPORT_BRANCHES') || 'null') || ['all'];
+let hqAnalyticsBranches = JSON.parse(localStorage.getItem('HQ_ANALYTICS_BRANCHES') || 'null') || ['all'];
+let moduleBranch = JSON.parse(localStorage.getItem('HQ_MODULE_BRANCH') || 'null') || {};
+let staffHistoryFilter = 'today';
+
+function escHtml(v){return String(v??'').replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));}
+function branchListSafe(){ return getBranchList().length ? getBranchList() : DEFAULT_BRANCHES.map(b=>({id:b.id,name:b.n})); }
+function branchNameById(id){ const b=branchListSafe().find(x=>x.id===id); return b?b.name:(id==='all'?'All Branches':id||'Main Branch'); }
+function currentModuleBranch(key){
+  if(currentPortal!=='hq') return currentBranchId || 'subang';
+  const list=branchListSafe();
+  return moduleBranch[key] || (list[0]&&list[0].id) || 'subang';
+}
+function setModuleBranch(key,val){ moduleBranch[key]=val; localStorage.setItem('HQ_MODULE_BRANCH',JSON.stringify(moduleBranch)); render(); }
+function singleBranchSelector(key,label='Branch'){
+  const val=currentModuleBranch(key);
+  return `<div class="branch-filter"><label>${label}</label><select class="input" onchange="setModuleBranch('${key}',this.value)">${branchListSafe().map(b=>`<option value="${b.id}" ${b.id===val?'selected':''}>${b.name}</option>`).join('')}</select></div>`;
+}
+function branchMultiSelector(stateName,selected,title='Branches'){
+  const sel=Array.isArray(selected)&&selected.length?selected:['all'];
+  const checked=id=>sel.includes('all')||sel.includes(id);
+  return `<section class="panel" style="padding:14px 18px;margin-bottom:14px"><b>${title}</b><div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px">
+    <label class="pill"><input type="checkbox" ${sel.includes('all')?'checked':''} onchange="setBranchMulti('${stateName}','all',this.checked)"> All Branches</label>
+    ${branchListSafe().map(b=>`<label class="pill"><input type="checkbox" ${checked(b.id)?'checked':''} onchange="setBranchMulti('${stateName}','${b.id}',this.checked)"> ${b.name}</label>`).join('')}
+  </div></section>`;
+}
+function setBranchMulti(stateName,id,on){
+  let arr = stateName==='reports' ? hqReportBranches : hqAnalyticsBranches;
+  if(id==='all') arr = on ? ['all'] : [];
+  else { arr = arr.filter(x=>x!=='all'); if(on && !arr.includes(id)) arr.push(id); if(!on) arr=arr.filter(x=>x!==id); }
+  if(!arr.length) arr=['all'];
+  if(stateName==='reports'){ hqReportBranches=arr; localStorage.setItem('HQ_REPORT_BRANCHES',JSON.stringify(arr)); }
+  else { hqAnalyticsBranches=arr; localStorage.setItem('HQ_ANALYTICS_BRANCHES',JSON.stringify(arr)); }
+  render();
+}
+function branchAllowed(id,arr){ return !Array.isArray(arr)||arr.includes('all')||arr.includes(id||'subang'); }
+function normalizeBranchOnRows(){
+  const def=currentPortal==='hq'?'subang':(currentBranchId||'subang');
+  (salesLog||[]).forEach(r=>{ if(!r.branchId) r.branchId=r.branch_id||def; if(!r.branchName) r.branchName=branchNameById(r.branchId); });
+  (orders||[]).forEach(o=>{ if(!o.branchId) o.branchId=currentPortal==='hq'?'subang':(currentBranchId||'subang'); if(!o.branchName) o.branchName=branchNameById(o.branchId); });
+  (inventory||[]).forEach(i=>{ if(!i.branchId) i.branchId='subang'; if(!i.branchName) i.branchName=branchNameById(i.branchId); });
+  (expenses||[]).forEach(e=>{ if(!e.branchId) e.branchId='subang'; if(!e.branchName) e.branchName=branchNameById(e.branchId); });
+  (promos||[]).forEach(p=>{ if(!Array.isArray(p.branches)) p.branches=['all']; });
+  (staff||[]).forEach(s=>{ if(!s.branchId) s.branchId=branchListSafe().find(b=>b.name===s.l)?.id || 'subang'; if(!s.l) s.l=branchNameById(s.branchId); if(!Array.isArray(s.history)) s.history=[]; });
+}
+
+const _batchAppState=appState;
+appState=function(){ const st=_batchAppState(); st.moduleBranch=moduleBranch; st.hqUsers=JSON.parse(localStorage.getItem('HQ_STAFF_USERS')||'[]'); return st; };
+const _batchApplyState=applyState;
+applyState=function(s){ _batchApplyState(s); if(s?.moduleBranch) moduleBranch=s.moduleBranch; if(Array.isArray(s?.hqUsers)) localStorage.setItem('HQ_STAFF_USERS',JSON.stringify(s.hqUsers)); normalizeBranchOnRows(); };
+
+const _batchSavePaidSale=savePaidSale;
+savePaidSale=function(o,method){
+  if(o && !o.branchId){ o.branchId=currentPortal==='hq'?'subang':(currentBranchId||'subang'); o.branchName=branchNameById(o.branchId); }
+  _batchSavePaidSale(o,method);
+  const last=(salesLog||[]).find(r=>r.no===o?.no);
+  if(last){ last.branchId=o.branchId||currentBranchId||'subang'; last.branchName=branchNameById(last.branchId); }
+};
+const _batchCreateOrder=createOrder;
+createOrder=function(){
+  _batchCreateOrder();
+  const o=orders.find(x=>x.no===selNo);
+  if(o){ o.branchId=currentPortal==='hq'?'subang':(currentBranchId||'subang'); o.branchName=branchNameById(o.branchId); }
+  queueSave();
+};
+
+function rangeSalesListForBranches(days,selected){
+  const list = (typeof filteredSales==='function') ? filteredSales(days) : (salesLog||[]);
+  return list.filter(r=>branchAllowed(r.branchId||r.branch_id||'subang',selected));
+}
+const _batchFilteredSalesBySelectedRange=filteredSalesBySelectedRange;
+function filteredSalesBySelectedRangeBranch(){
+  const list=_batchFilteredSalesBySelectedRange ? _batchFilteredSalesBySelectedRange() : (salesLog||[]);
+  return currentPortal==='hq' ? list.filter(r=>branchAllowed(r.branchId||'subang',hqReportBranches)) : list.filter(r=>(r.branchId||'subang')===(currentBranchId||'subang'));
+}
+reportView=function(){
+  const list=currentPortal==='hq'?filteredSalesBySelectedRangeBranch():_batchFilteredSalesBySelectedRange();
+  const tableRows=groupedSalesFromList(list);
+  const chartRows=trendRowsForSales(list,'sales');
+  const total=tableRows.reduce((s,r)=>s+r.sales,0), ordersCount=tableRows.reduce((s,r)=>s+r.orders,0), avg=ordersCount?total/ordersCount:0;
+  const best=tableRows.slice().sort((a,b)=>b.sales-a.sales)[0];
+  const filter=currentPortal==='hq'?branchMultiSelector('reports',hqReportBranches,'Branch Filter'):'';
+  return head(currentPortal==='hq'?'All Branch Reports':'Sales Report','Smart POS · '+reportRangeLabel(),'<button class="btn dark" onclick="window.print()">Download Report</button>')+
+  filter+rangeFilterButtons()+
+  `<div class="stats"><div class="stat"><small>Total Sales</small><h2>${rm(total)}</h2></div><div class="stat"><small>Total Orders</small><h2>${ordersCount}</h2></div><div class="stat"><small>Avg Order</small><h2>${rm(avg)}</h2></div><div class="stat"><small>Best Day</small><h2>${best?`${shortDate(best.key)} · ${rm(best.sales)}`:'—'}</h2></div></div>`+
+  properLineGraph(chartRows,'sales','Day total')+panelTable(['Date','Day','Orders','Avg/Order','Sales'],tableRows.map(r=>[shortDate(r.key),dayName(r.key),r.orders,rm(r.orders?r.sales/r.orders:0),`<b>${rm(r.sales)}</b>`]));
+};
+analyticsView=function(){
+  const now=new Date(); const start=new Date(now); start.setDate(start.getDate()-6);
+  let paid=(salesLog||[]).filter(s=>{const d=dateObjFromKey(normalizeSaleKey(s.key||s.date||todayKey())); return d>=new Date(start.getFullYear(),start.getMonth(),start.getDate()) && d<=new Date(now.getFullYear(),now.getMonth(),now.getDate(),23,59,59);});
+  if(currentPortal==='hq') paid=paid.filter(r=>branchAllowed(r.branchId||'subang',hqAnalyticsBranches)); else paid=paid.filter(r=>(r.branchId||'subang')===(currentBranchId||'subang'));
+  const map={}; for(let i=0;i<7;i++){const d=new Date(start); d.setDate(start.getDate()+i); const k=localDateKey(d); map[k]={key:k,sales:0,orders:0};}
+  paid.forEach(r=>{const k=normalizeSaleKey(r.key||r.date||todayKey()); if(!map[k])map[k]={key:k,sales:0,orders:0}; map[k].sales+=Number(r.sales||r.total||0); map[k].orders+=Number(r.orders||1);});
+  const rows=Object.values(map).sort((a,b)=>dateObjFromKey(a.key)-dateObjFromKey(b.key));
+  const total=rows.reduce((s,r)=>s+r.sales,0), count=rows.reduce((s,r)=>s+r.orders,0), avg=count?total/count:0;
+  const typeSum=t=>paid.filter(r=>(r.type||'take')===t).reduce((s,r)=>s+Number(r.sales||0),0); const dine=typeSum('dine'), take=typeSum('take'), del=typeSum('delivery');
+  const filter=currentPortal==='hq'?branchMultiSelector('analytics',hqAnalyticsBranches,'Branch Filter'):'';
+  return head('Restaurant Analytics','Smart POS · Last 7 days')+filter+`<div class="stats"><div class="stat"><small>Total Revenue</small><h2>${rm(total)}</h2></div><div class="stat"><small>Order Count</small><h2>${count}</h2></div><div class="stat"><small>Avg Order</small><h2>${rm(avg)}</h2></div><div class="stat"><small>Peak Time</small><h2>8 PM</h2></div></div>`+properLineGraph(rows,'orders','Orders per day')+panelTable(['Order Type','Share','Revenue'],[['Dine-In',total?Math.round((dine/total)*100)+'%':'0%',rm(dine)],['Takeaway',total?Math.round((take/total)*100)+'%':'0%',rm(take)],['Delivery',total?Math.round((del/total)*100)+'%':'0%',rm(del)]]);
+};
+
+function staffUserStore(){ try{return JSON.parse(localStorage.getItem('HQ_STAFF_USERS')||'[]')}catch(e){return []} }
+function saveStaffUserStore(a){ localStorage.setItem('HQ_STAFF_USERS',JSON.stringify(a)); }
+function addOrUpdateLoginUser(username,password,pin,portal,roleName,branchId,branchName,displayName){
+  if(!username||!password)return;
+  const arr=staffUserStore().filter(u=>u.username!==username);
+  arr.push({username,password,pin:pin||'1234',portal:portal||'branch',role:(roleName||'cashier').toLowerCase().includes('waiter')?'waiter':'cashier',roleName,branchId,branchName,displayName});
+  saveStaffUserStore(arr);
+}
+addStaff=function(){
+  const b=branchListSafe();
+  openFormModal('Add Staff / User Login',[
+    {name:'u',label:'Staff Name',required:true,placeholder:'e.g. Ahmed'},
+    {name:'d',label:'Role',type:'select',value:'Cashier',options:['Cashier','Waiter','Kitchen','Tandoor','Manager','Admin','Inventory Manager']},
+    {name:'branchId',label:'Branch',type:'select',value:b[0]?.id||'subang',options:b.map(x=>x.id)},
+    {name:'username',label:'Username',required:true,placeholder:'e.g. subangcashier'},
+    {name:'password',label:'Password',required:true,placeholder:'e.g. Subang123'},
+    {name:'pin',label:'4 Digit PIN',type:'number',value:'1234',note:'Used to unlock POS after auto-lock'}
+  ],d=>{
+    const branchId=d.branchId||'subang'; const branchName=branchNameById(branchId);
+    staff.push({u:d.u.trim(),d:d.d||'Staff',l:branchName,branchId,username:d.username,password:d.password,pin:String(d.pin||'1234').slice(0,4),s:'Absent',ci:'-',co:'',hours:0,history:[]});
+    addOrUpdateLoginUser(d.username,d.password,String(d.pin||'1234').slice(0,4),'branch',d.d,branchId,branchName,d.u.trim());
+    toast('Staff login created');
+  });
+};
+function staffRecordDateOK(rec){
+  const k=rec.date||todayKey(); const d=dateObjFromKey(k); const today=dateObjFromKey(todayKey());
+  if(staffHistoryFilter==='today') return k===todayKey();
+  if(staffHistoryFilter==='yesterday'){const y=new Date(today);y.setDate(y.getDate()-1);return k===localDateKey(y);}
+  if(staffHistoryFilter==='7'){const s=new Date(today);s.setDate(s.getDate()-6);return d>=s&&d<=today;}
+  if(staffHistoryFilter==='month') return d.getFullYear()===today.getFullYear()&&d.getMonth()===today.getMonth();
+  return true;
+}
+function setStaffHistoryFilter(v){staffHistoryFilter=v; const idx=Number(document.getElementById('staffProfileIdx')?.value||0); viewStaffProfile(idx);}
+function viewStaffProfile(i){
+  normalizeBranchOnRows(); const s=staff[i]; if(!s)return;
+  const hist=(s.history||[]).filter(staffRecordDateOK).slice().reverse();
+  const monthHours=(s.history||[]).filter(r=>{const d=dateObjFromKey(r.date);const n=new Date();return d.getMonth()===n.getMonth()&&d.getFullYear()===n.getFullYear();}).reduce((a,r)=>a+Number(r.hours||0),0);
+  document.getElementById('formModalTitle').textContent='Staff Profile — '+s.u;
+  document.getElementById('formModalBody').innerHTML=`<input type="hidden" id="staffProfileIdx" value="${i}"><div class="stats" style="grid-template-columns:repeat(4,1fr);grid-column:1/-1"><div class="stat"><small>Role</small><h2 style="font-size:18px">${escHtml(s.d||'-')}</h2></div><div class="stat"><small>Branch</small><h2 style="font-size:18px">${escHtml(s.l||'-')}</h2></div><div class="stat"><small>This Month Hours</small><h2>${monthHours.toFixed(2)}</h2></div><div class="stat"><small>Status</small><h2 style="font-size:18px">${escHtml(s.s||'Absent')}</h2></div></div>
+  <div style="grid-column:1/-1;display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 10px"><button class="chip ${staffHistoryFilter==='today'?'gold':''}" onclick="setStaffHistoryFilter('today')">Today</button><button class="chip ${staffHistoryFilter==='yesterday'?'gold':''}" onclick="setStaffHistoryFilter('yesterday')">Yesterday</button><button class="chip ${staffHistoryFilter==='7'?'gold':''}" onclick="setStaffHistoryFilter('7')">Last 7 Days</button><button class="chip ${staffHistoryFilter==='month'?'gold':''}" onclick="setStaffHistoryFilter('month')">This Month</button><button class="chip ${staffHistoryFilter==='all'?'gold':''}" onclick="setStaffHistoryFilter('all')">All</button></div>
+  <div style="grid-column:1/-1">${panelTable(['Date','Check In','Check Out','Hours','Status'],hist.length?hist.map(r=>[shortDate(r.date),r.ci||'-',r.co||'-',Number(r.hours||0).toFixed(2)+' hrs',r.status||'Completed']):[['-','-','-','-','No history found']])}</div>`;
+  formModalSave=null; document.getElementById('formModal').classList.add('show');
+}
+staffCheckOut=function(i){
+  const s=staff[i]; if(!(s.s==='On Duty'||(s.ci&&s.ci!=='-'&&!s.co))){toast('Staff is not checked in');return;}
+  s.co=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}); const ms=s.checkInTs?Date.now()-Number(s.checkInTs):0; const hrs=ms?ms/3600000:0;
+  s.hours=Number(s.hours||0)+hrs; s.history=s.history||[]; s.history.push({date:todayKey(),ci:s.ci,co:s.co,hours:hrs,status:'Completed'});
+  s.checkInTs=null; s.checkoutDate=todayKey(); s.s='Checked Out'; toast(s.u+' checked out'); render();
+};
+staffView=function(){
+  normalizeBranchOnRows(); const today=todayKey(); const present=staff.filter(s=>s.s==='On Duty').length; const checkedOut=staff.filter(s=>s.checkoutDate===today).length; const totalHours=staff.reduce((a,s)=>a+Number(s.hours||0),0);
+  const rows=staff.map((s,i)=>{let action=''; if(s.s==='On Duty'||(s.ci&&s.ci!=='-'&&!s.co)) action=`<button class="btn green" onclick="staffCheckOut(${i})">Check Out</button>`; else if(s.checkoutDate===today) action='<span class="pill green-pill">Completed Today</span>'; else action=`<button class="btn blue" onclick="staffCheckIn(${i})">Check In</button>`; return [`<b>${escHtml(s.u)}</b><br><button class="chip" onclick="viewStaffProfile(${i})">View Profile</button>`,s.d||'-',s.l||'Main Branch',s.ci||'-',s.co||'-',`${Number(s.hours||0).toFixed(2)} hrs`,pill(s.s||'Absent',s.s==='Absent'?'red':'green'),action];});
+  return head('Staff Center','Attendance, check-in/check-out and working hours',`<button class="btn light" onclick="addStaff()">+ Add Staff</button><button class="btn dark" onclick="downloadCSV('staff-attendance',['User','Designation','Location','CheckIn','CheckOut','Hours','Status'],staff.map(s=>[s.u,s.d,s.l,s.ci||'-',s.co||'-',s.hours||0,s.s]))">Download Attendance</button>`)+`<div class="stats"><div class="stat"><small>Total Staff</small><h2>${staff.length}</h2></div><div class="stat"><small>On Duty</small><h2>${present}</h2></div><div class="stat"><small>Completed Today</small><h2>${checkedOut}</h2></div><div class="stat"><small>Total Hours</small><h2>${totalHours.toFixed(2)}</h2></div></div>`+panelTable(['Staff','Role','Branch','Check In','Check Out','Hours','Status','Action'],rows);
+};
+
+function branchCheckboxesHTML(selected){
+  const sel=Array.isArray(selected)?selected:['all'];
+  return `<div style="grid-column:1/-1"><label>Select Branches</label><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><label class="pill"><input type="checkbox" class="promoBranch" value="all" ${sel.includes('all')?'checked':''}> All Branches</label>${branchListSafe().map(b=>`<label class="pill"><input type="checkbox" class="promoBranch" value="${b.id}" ${sel.includes('all')||sel.includes(b.id)?'checked':''}> ${b.name}</label>`).join('')}</div></div>`;
+}
+function selectedPromoBranches(){ let vals=[...document.querySelectorAll('.promoBranch:checked')].map(x=>x.value); if(!vals.length||vals.includes('all')) return ['all']; return vals; }
+const _oldEditCouponBatch=editCoupon;
+editCoupon=function(idx,typeOverride){
+  _oldEditCouponBatch(idx,typeOverride);
+  const p=idx!==null?promos[idx]:null;
+  const body=document.getElementById('formModalBody');
+  if(body) body.insertAdjacentHTML('afterbegin',branchCheckboxesHTML(p?.branches||['all']));
+  const oldSave=formModalSave;
+  formModalSave=function(d){
+    const res=oldSave?oldSave(d):undefined;
+    const target=idx!==null?promos[idx]:promos[promos.length-1];
+    if(target) target.branches=selectedPromoBranches();
+    return res;
+  };
+};
+promoView=function(){
+  const rows=promos.map((p,i)=>[p.code||'-',p.title||'-',p.promoKind||p.applyOn||p.discountType||p.ty||'-',(p.discountType==='Amount (RM)'?'RM ':'')+(p.value||p.v||0)+(p.discountType==='Percentage (%)'?'%':''),p.condition||p.applyOn||'-',(p.start||'-')+' → '+(p.end||'-'),(p.branches||['all']).includes('all')?'All Branches':(p.branches||[]).map(branchNameById).join(', '),`${p.used||0}/${p.limit||0}`,pill(p.s||'Active','green'),`<button class="chip" onclick="editCoupon(${i})">Edit</button> <button class="chip" style="color:var(--red)" onclick="deleteCoupon(${i})">Delete</button>`]);
+  return head('Promotions','Choose a promotion type, then fill only the relevant fields','<button class="btn dark" onclick="addCouponChooser()">+ Add Coupon</button>')+promoTypeCards()+`<div class="stats"><div class="stat"><small>Total Promotions</small><h2>${promos.length}</h2></div><div class="stat"><small>Active</small><h2>${promos.filter(p=>p.s!=='Inactive').length}</h2></div><div class="stat"><small>Used</small><h2>${promos.reduce((a,p)=>a+Number(p.used||0),0)}</h2></div><div class="stat"><small>Types</small><h2>${new Set(promos.map(p=>p.promoKind||p.applyOn)).size||0}</h2></div></div>`+panelTable(['Code','Title','Promotion Type','Value','Condition','Validity','Branch','Used/Limit','Status','Action'],rows);
+};
+
+const _oldQrMenuLink=qrMenuLink;
+qrMenuLink=function(t=qrTableClean(qrTable)){ const br=currentModuleBranch('qr'); const base=_oldQrMenuLink(t); return base+(base.includes('?')?'&':'?')+'branch='+encodeURIComponent(br); };
+const _oldSaveCurrentQR=saveCurrentQR;
+saveCurrentQR=function(){ _oldSaveCurrentQR(); const t=qrTableClean(qrTable); const row=savedQRCodes.find(r=>r.table===t); if(row){ row.branchId=currentModuleBranch('qr'); row.branchName=branchNameById(row.branchId); row.link=qrMenuLink(t);} render(); };
+const _oldPrintQRSheet=printQRSheet;
+printQRSheet=function(){
+  const br=currentModuleBranch('qr'); const rows=(savedQRCodes.length?savedQRCodes:safeTableList().map(t=>({table:String(t.n).padStart(2,'0'),branchId:br,branchName:branchNameById(br),link:qrMenuLink(String(t.n).padStart(2,'0'))}))).filter(r=>(r.branchId||br)===br);
+  const w=window.open('','_blank'); w.document.write(`<!doctype html><title>QR Sheet</title><body style="font-family:Arial;padding:25px"><h1>${restaurantName} — ${branchNameById(br)} QR Codes</h1><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:22px">${rows.map(r=>`<div style="text-align:center;border:1px solid #ddd;padding:15px;break-inside:avoid"><h2>${branchNameById(r.branchId)} · Table T${r.table}</h2><img src="${qrImageUrl(r.link,240)}" style="width:240px;height:240px"><p style="font-size:11px;word-break:break-all">${r.link}</p></div>`).join('')}</div><script>window.print()<\/script></body>`); w.document.close();
+};
+qrView=function(){
+  const br=currentModuleBranch('qr'); const tablesList=safeTableList().map(t=>String(t.n).padStart(2,'0')); const link=qrMenuLink(); const qr=qrImageUrl(link,260);
+  const savedRows=savedQRCodes.filter(r=>(r.branchId||br)===br).slice().sort((a,b)=>a.table.localeCompare(b.table)).map(r=>[`<b>Table T${r.table}</b>`,branchNameById(r.branchId||br),`<span style="font-size:12px;color:var(--muted);word-break:break-all">${r.link}</span>`,`<img src="${qrImageUrl(r.link,72)}" style="width:72px;height:72px;background:white;border:6px solid #fff;border-radius:8px">`,`<button class="chip" onclick="copyQRLink('${r.table}')">Copy</button> <a class="chip" href="${r.link}" target="_blank">Open</a> <button class="chip" onclick="printQRFor('${r.table}')">Print</button> <button class="chip" style="color:var(--red)" onclick="deleteSavedQR('${r.table}')">Delete</button>`]);
+  return head('QR Table Ordering','Generate and save real table QR codes. Customer scans, adds items to cart and places order directly into POS.','<button class="btn blue" onclick="printQRSheet()">Print QR Sheet</button>')+singleBranchSelector('qr','Branch')+`<div class="panel" style="padding:22px;display:grid;grid-template-columns:300px 1fr;gap:26px;align-items:center"><div style="text-align:center"><img src="${qr}" style="width:260px;height:260px;border:12px solid #fff;box-shadow:0 10px 25px rgba(0,0,0,.12);background:white"><div style="margin-top:10px;font-weight:900;color:var(--blue)">${branchNameById(br)} · Table T${qrTableClean(qrTable)}</div></div><div><h2>Customer QR Ordering</h2><p style="color:var(--muted);margin:10px 0">Select a branch and table, save the QR, and place it on that table.</p><label style="font-size:12px;font-weight:900;color:var(--muted);text-transform:uppercase">Select Table</label><select class="input" style="max-width:220px;margin:6px 0 12px" onchange="qrTable=this.value;render()">${tablesList.map(t=>`<option value="${t}" ${t===qrTableClean(qrTable)?'selected':''}>Table T${t}</option>`).join('')}</select><label style="font-size:12px;font-weight:900;color:var(--muted);text-transform:uppercase">Menu Link</label><input class="input" value="${link}" readonly><div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px"><button class="btn blue" onclick="saveCurrentQR()">Save QR</button><button class="btn green" onclick="copyQRLink()">Copy Link</button><a class="btn light" href="${link}" target="_blank">Open Customer Menu</a><button class="btn dark" onclick="printQRFor()">Print QR</button></div></div></div><div class="panel" style="padding:18px;margin-top:16px"><h3>Saved QR Codes</h3>${savedRows.length?panelTable(['Table','Branch','Link','QR','Action'],savedRows):'<div class="empty">No saved QR yet. Select a branch/table and click Save QR.</div>'}</div>`;
+};
+
+invView=function(){
+  normalizeBranchOnRows(); const br=currentModuleBranch('inventory'); const list=inventory.filter(i=>(i.branchId||'subang')===br); const out=list.filter(i=>i.s==='out').length, low=list.filter(i=>i.s==='low').length, good=list.filter(i=>i.s==='good').length; const alerts=list.filter(i=>i.s==='low'||i.s==='out');
+  return head('Inventory','Ingredient stock and low-stock alerts','<button class="btn blue" onclick="addIngredient()">+ Add Ingredient</button>')+singleBranchSelector('inventory','Branch')+`<div class="stats"><div class="stat"><small>Out of Stock</small><h2>${out}</h2></div><div class="stat"><small>Low Stock</small><h2>${low}</h2></div><div class="stat"><small>In Stock</small><h2 style="color:var(--green)">${good}</h2></div></div>`+(alerts.length?`<div class="panel" style="padding:14px;margin-bottom:14px;border-left:5px solid var(--orange)"><b>Low Stock Warning</b><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">${alerts.map(i=>`<span class="pill ${i.s==='out'?'red-pill':'blue-pill'}">${i.i}: ${i.q} ${i.u} / alert ${invAlertSafe(i)} ${i.u}</span>`).join('')}</div></div>`:'')+panelTable(['Ingredient','Branch','Stock','Unit','Low Warning','Status','Adjust','Action'],list.map((i)=>{const idx=inventory.indexOf(i);return [`<b>${i.i}</b>`,branchNameById(i.branchId),i.q,i.u,`≤ ${invAlertSafe(i)} ${i.u}`,pill(i.s==='good'?'In Stock':i.s==='low'?'Low Stock':'Out of Stock',i.s==='good'?'green':'red'),`<button class="step" onclick="adjStock(${idx},-1)">−</button> <button class="step" onclick="adjStock(${idx},1)">+</button>`,`<button class="chip" onclick="editIngredient(${idx})">Edit</button>`]}));
+};
+const _oldAddIngredient=addIngredient;
+addIngredient=function(){ const br=currentModuleBranch('inventory'); openFormModal('Add Ingredient',usernameFields=[{name:'name',label:'Ingredient name',required:true},{name:'q',label:'Quantity',type:'number',value:10},{name:'u',label:'Unit',type:'select',value:'kg',options:['kg','liter','piece']},{name:'alert',label:'Low stock warning at',type:'number',value:5}],d=>{if(!d.name){toast('Ingredient name required');return false;} const q=parseFloat(d.q)||0; const u=d.u||'kg'; const alert=parseFloat(d.alert)||0; const existing=inventory.find(x=>x.i.toLowerCase()===d.name.trim().toLowerCase()&&x.u===u&&x.branchId===br); if(existing){existing.q=Number(existing.q||0)+q; existing.alert=alert||existing.alert; existing.s=invStatus(existing.q,existing.alert); toast('Existing ingredient stock updated');} else inventory.push({i:d.name.trim(),q,u,alert,s:invStatus(q,alert),branchId:br,branchName:branchNameById(br)});}); };
+
+expensesView=function(){
+  normalizeBranchOnRows(); const br=currentModuleBranch('expenses'); const list=expenses.filter(e=>(e.branchId||'subang')===br); const today=todayExpenseRows().filter(e=>(e.branchId||'subang')===br); const month=expenses.filter(e=>(e.date||'').slice(0,7)===todayKey().slice(0,7)&&(e.branchId||'subang')===br);
+  return head('Expenses','Add restaurant expenses with payment type and receipt upload',`<button class="btn blue" onclick="addExpense()">+ Add Expense</button><button class="btn dark" onclick="downloadCSV('expenses',['Date','Branch','Category','Description','Payment Type','Amount','Receipt'],expenses.map(e=>[e.date,e.branchName,e.category,e.desc,e.method,e.amount,e.receipt?'Yes':'No']))">Download Expenses</button>`)+singleBranchSelector('expenses','Branch')+`<div class="stats"><div class="stat"><small>Today Expenses</small><h2>${rm(expenseSum(today))}</h2></div><div class="stat"><small>Cash Expenses Today</small><h2>${rm(expenseByMethod(['Cash'],today))}</h2></div><div class="stat"><small>QR/TNG/Card Today</small><h2>${rm(expenseSum(today)-expenseByMethod(['Cash'],today))}</h2></div><div class="stat"><small>This Month</small><h2>${rm(expenseSum(month))}</h2></div></div>`+panelTable(['Date','Branch','Category','Description','Payment','Amount','Receipt','Action'],list.slice().reverse().map(e=>[e.date||'-',branchNameById(e.branchId),`<b>${e.category||'Other'}</b>`,e.desc||'-',e.method||'Cash',`<b>${rm(e.amount||0)}</b>`,e.receipt?`<button class="chip" onclick="viewExpenseReceipt('${e.id}')">View</button>`:`<button class="chip" onclick="uploadExpenseReceipt('${e.id}')">Upload</button>`,`<button class="chip" onclick="editExpense('${e.id}')">Edit</button> <button class="chip" style="color:var(--red)" onclick="deleteExpense('${e.id}')">Delete</button>`]));
+};
+const _oldAddExpense=addExpense;
+addExpense=function(){ const br=currentModuleBranch('expenses'); _oldAddExpense(); const save=formModalSave; formModalSave=async function(d){ await save(d); const e=expenses[expenses.length-1]; if(e){ e.branchId=br; e.branchName=branchNameById(br);} }; };
+recipesView=function(){ const br=currentModuleBranch('recipes'); return head('Recipe & Auto Stock Deduction','Select ingredients from Inventory and set quantity per menu item. Stock will be deducted automatically when sold.','<button class="btn blue" onclick="addRecipe()">+ Add Recipe</button>')+singleBranchSelector('recipes','Branch')+panelTable(['Menu Item','Branch','Recipe Ingredients','Action'],MENU.map(m=>{const r=recipes[m.id]; return [`<b>${m.name}</b>`,branchNameById(br),r&&r.length?r.map(x=>`${x.i}: ${x.q}${x.u}`).join('<br>'):'<span style="color:var(--muted)">No recipe added</span>',r&&r.length?`<button class="chip" onclick="editRecipe(${m.id})">Edit</button> <button class="chip" style="color:var(--red)" onclick="deleteRecipe(${m.id})">Delete</button>`:`<button class="chip" onclick="editRecipe(${m.id})">Add</button>`]})); };
+kotPrinterView=function(){ const br=currentModuleBranch('kotprinter'); return head('Auto KOT Printer','Auto print Kitchen Order Ticket when waiter sends order to kitchen')+singleBranchSelector('kotprinter','Branch')+`<div class="stats"><div class="stat"><small>Auto Print</small><h2 style="color:${kotAutoPrint?'var(--green)':'var(--red)'}">${kotAutoPrint?'ON':'OFF'}</h2></div><div class="stat"><small>Copies</small><h2>${kotCopies}</h2></div><div class="stat"><small>Printers</small><h2>4</h2></div><div class="stat"><small>KOT Logs</small><h2>${kotLogs.length}</h2></div></div><section class="panel" style="padding:18px;margin-bottom:16px"><h3>${branchNameById(br)} Printer Mapping</h3><div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:14px">${Object.keys(printerMap).map(k=>`<div><label style="font-weight:900;font-size:12px;color:var(--muted)">${k}</label><input class="input" value="${printerMap[k]}" onchange="printerMap['${k}']=this.value"></div>`).join('')}</div><div style="display:flex;gap:8px;margin-top:14px"><button class="btn ${kotAutoPrint?'green':'light'}" onclick="kotAutoPrint=!kotAutoPrint;render()">${kotAutoPrint?'Auto Print ON':'Auto Print OFF'}</button><button class="btn blue" onclick="printKOT(orders.find(o=>o.no===selNo)||orders[0])">Test Print KOT</button></div></section>`+panelTable(['Time','Branch','Order','Station','Printer','Status'],kotLogs.slice().reverse().map(l=>[l.time,branchNameById(br),l.order,l.station,l.printer,l.status])); };
+loyaltyView=function(){ const br=currentModuleBranch('loyalty'); return head('Customer Loyalty Points','Rewards based on customer spending')+singleBranchSelector('loyalty','Branch')+panelTable(['Customer','Branch','Tier','Total Spending','Points','Action'],customers.map((c,i)=>{const pts=Math.floor(c.sp/10);return [`<b>${c.n}</b>`,branchNameById(c.branchId||br),c.l,rm(c.sp),pts,`<button class="chip" onclick="customers[${i}].sp+=50;customers[${i}].branchId='${br}';toast('50 RM spend added');render()">+ Points</button>`]})); };
+
+function ensureLockOverlay(){
+  if(document.getElementById('pinLockOverlay'))return;
+  document.body.insertAdjacentHTML('beforeend',`<div id="pinLockOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:99999;place-items:center"><div class="panel" style="width:360px;max-width:92%;padding:24px;text-align:center"><h2>Session Locked</h2><p style="color:var(--muted);margin:8px 0 16px">Enter your 4-digit PIN to continue.</p><input id="unlockPin" class="input" type="password" maxlength="4" placeholder="PIN" style="text-align:center;font-size:24px;letter-spacing:8px"><button class="btn blue" style="width:100%;margin-top:12px" onclick="unlockWithPin()">Unlock</button></div></div>`);
+}
+let lockTimer=null;
+function resetAutoLock(){ if(currentPortal==='hq')return; clearTimeout(lockTimer); lockTimer=setTimeout(()=>{ensureLockOverlay(); document.getElementById('pinLockOverlay').style.display='grid';},120000); }
+function unlockWithPin(){ const pin=document.getElementById('unlockPin').value; const expected=POS_SESSION?.pin||staffUserStore().find(u=>u.username===POS_SESSION?.username)?.pin||'1234'; if(pin===String(expected)){document.getElementById('pinLockOverlay').style.display='none';document.getElementById('unlockPin').value='';resetAutoLock();}else toast('Wrong PIN'); }
+['click','keydown','mousemove','touchstart'].forEach(e=>document.addEventListener(e,resetAutoLock,{passive:true}));
+setTimeout(resetAutoLock,500);
+normalizeBranchOnRows();
+/* ---------- END HQ MULTI-BRANCH BATCH PATCH ---------- */
 
 applyThemePref();
 renderNav();render();hydrated=true;
