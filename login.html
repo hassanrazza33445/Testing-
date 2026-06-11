@@ -73,50 +73,56 @@ body{background:var(--bg);color:var(--text);min-height:100vh;display:grid;place-
       <p>Manage orders, tables, billing, staff, reports and inventory from one clean restaurant system.</p>
       <div class="mini-stats"><div class="mini"><b>24/7</b><span>Operations</span></div><div class="mini"><b>RM</b><span>Billing</span></div><div class="mini"><b>CSV</b><span>Reports</span></div></div>
     </div>
-    <p>Demo logins: HQ owner or branch staff. Use the credentials shown on this screen.</p>
+    <p>Secure login for HQ owners and branch staff. Accounts are managed in Supabase.</p>
   </section>
   <section class="form-side">
     <h2>Welcome back</h2>
     <p>Login to continue to your restaurant POS workspace.</p>
-    <div class="field"><label>Username</label><input class="input" id="loginUser" type="text" placeholder="owner / Subang / Subangw1"></div>
-    <div class="field"><label>Password</label><input class="input" id="loginPass" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')loginPOS()"></div>
+    <div class="field"><label>Email</label><input class="input" id="loginUser" type="email" autocomplete="username" placeholder="owner@stonixra.pos"></div>
+    <div class="field"><label>Password</label><input class="input" id="loginPass" type="password" autocomplete="current-password" placeholder="••••••••" onkeydown="if(event.key==='Enter')loginPOS()"></div>
     <div class="row"><label><input type="checkbox" checked> Remember me</label><a href="#">Forgot password?</a></div>
-    <button class="btn blue" onclick="loginPOS()" style="width:100%">Login to Dashboard</button>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px">
-      <button class="btn light" onclick="quickLogin('owner')">HQ Owner Demo</button>
-      <button class="btn light" onclick="quickLogin('Subang')">Subang Cashier Demo</button>
-    </div>
-    <div class="note">
-      <b>Demo credentials</b><br>
-      HQ Owner: <b>owner</b> / <b>owner123</b><br>
-      Subang Cashier: <b>Subang</b> / <b>Subang123</b><br>
-      Subang Waiter: <b>Subangw1</b> / <b>Subang1234</b>
-    </div>
+    <button class="btn blue" id="loginBtn" onclick="loginPOS()" style="width:100%">Login to Dashboard</button>
+    <div class="note" id="loginMsg" style="display:none"></div>
   </section>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
-const DEMO_USERS={
-  owner:{password:"owner123",portal:"hq",role:"owner",branchId:"all",branchName:"All Branches",displayName:"HQ Owner"},
-  admin:{password:"admin123",portal:"hq",role:"admin",branchId:"all",branchName:"All Branches",displayName:"HQ Admin"},
-  Subang:{password:"Subang123",portal:"branch",role:"cashier",branchId:"subang",branchName:"Subang",displayName:"Subang Branch Cashier"},
-  Subangw1:{password:"Subang1234",portal:"branch",role:"waiter",branchId:"subang",branchName:"Subang",displayName:"Subang Branch Waiter"},
-  Nilai:{password:"Nilai123",portal:"branch",role:"cashier",branchId:"nilai",branchName:"Nilai",displayName:"Nilai Branch Cashier"},
-  Puncak:{password:"Puncak123",portal:"branch",role:"cashier",branchId:"puncak",branchName:"Puncak Alam",displayName:"Puncak Branch Cashier"}
-};
-function quickLogin(username){
-  document.getElementById('loginUser').value=username;
-  document.getElementById('loginPass').value=DEMO_USERS[username].password;
-  loginPOS();
-}
-function loginPOS(){
-  const username=(document.getElementById('loginUser').value||'').trim();
+const SUPABASE_URL=(localStorage.getItem('SUPABASE_URL')||'https://xhvuyjrulhppicxwdtxq.supabase.co').trim();
+const SUPABASE_KEY=(localStorage.getItem('SUPABASE_ANON_KEY')||'sb_publishable_Fngj-vd-XZZjKimf92c9YA_EfIiYOY-').trim();
+const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+
+function showMsg(t,bad){const m=document.getElementById('loginMsg');if(!m)return;m.style.display='block';m.innerHTML=t;m.style.color=bad?'#ff6b6b':'';}
+
+// If already signed in, skip login.
+(async()=>{try{const{data}=await sb.auth.getSession();if(data.session&&localStorage.getItem('POS_USER'))location.href='app.html';}catch(e){}})();
+
+async function loginPOS(){
+  const email=(document.getElementById('loginUser').value||'').trim();
   const password=(document.getElementById('loginPass').value||'').trim();
-  const extraUsers=(()=>{try{const arr=JSON.parse(localStorage.getItem('HQ_STAFF_USERS')||'[]'); const map={}; arr.forEach(u=>{map[u.username]={password:u.password,portal:u.portal||'branch',role:u.role||'cashier',branchId:u.branchId||'subang',branchName:u.branchName||'Subang',displayName:u.displayName||u.username,pin:u.pin||'1234'};}); return map;}catch(e){return {}}})();
-  const u=DEMO_USERS[username] || extraUsers[username];
-  if(!u||u.password!==password){alert('Invalid username or password');return;}
-  localStorage.setItem('POS_USER',JSON.stringify({username,...u,loggedAt:new Date().toISOString()}));
-  location.href='app.html';
+  if(!email||!password){showMsg('Enter email and password',true);return;}
+  const btn=document.getElementById('loginBtn');btn.disabled=true;btn.textContent='Signing in...';
+  showMsg('');document.getElementById('loginMsg').style.display='none';
+  try{
+    const{data,error}=await sb.auth.signInWithPassword({email,password});
+    if(error){showMsg(error.message||'Invalid email or password',true);return;}
+    let prof=null;
+    try{const r=await sb.from('profiles').select('*').eq('id',data.user.id).maybeSingle();prof=r.data;}catch(e){}
+    const p=prof||{};
+    if(p.active===false){await sb.auth.signOut();showMsg('This account is disabled. Contact HQ.',true);return;}
+    const session={
+      username:email,email,
+      portal:p.portal||'branch',
+      role:p.role||'cashier',
+      branchId:p.branch_id||'subang',
+      branchName:p.branch_name||'Subang',
+      displayName:p.display_name||email.split('@')[0],
+      loggedAt:new Date().toISOString()
+    };
+    localStorage.setItem('POS_USER',JSON.stringify(session));
+    location.href='app.html';
+  }catch(e){showMsg('Login failed. Check internet / Supabase.',true);}
+  finally{btn.disabled=false;btn.textContent='Login to Dashboard';}
 }
 </script>
 </body>

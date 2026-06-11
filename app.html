@@ -2421,12 +2421,34 @@ window.render=function(){
 /* ---------- HQ / BRANCH LOGIN ROUTING PATCH ---------- */
 const POS_SESSION = (()=>{try{return JSON.parse(localStorage.getItem('POS_USER')||'null')}catch(e){return null}})();
 if(!POS_SESSION){ location.href='login.html'; }
+
+/* Verify a REAL Supabase auth session exists. Stops faked localStorage access. */
+(async()=>{
+  try{
+    if(!window.supabase) return;
+    const _u=(localStorage.getItem('SUPABASE_URL')||'https://xhvuyjrulhppicxwdtxq.supabase.co').trim();
+    const _k=(localStorage.getItem('SUPABASE_ANON_KEY')||'sb_publishable_Fngj-vd-XZZjKimf92c9YA_EfIiYOY-').trim();
+    const _c=window.supabase.createClient(_u,_k);
+    const {data}=await _c.auth.getSession();
+    if(!data || !data.session){ localStorage.removeItem('POS_USER'); location.href='login.html'; }
+  }catch(e){}
+})();
+
 let currentPortal = POS_SESSION?.portal || 'branch';
 let currentBranchId = POS_SESSION?.branchId || 'subang';
 let currentBranchName = POS_SESSION?.branchName || 'Subang';
 role = POS_SESSION?.role==='waiter' ? 'waiter' : 'cashier';
 
-function logoutPOS(){ localStorage.removeItem('POS_USER'); location.href='login.html'; }
+function logoutPOS(){
+  try{
+    if(window.supabase){
+      const _u=(localStorage.getItem('SUPABASE_URL')||'https://xhvuyjrulhppicxwdtxq.supabase.co').trim();
+      const _k=(localStorage.getItem('SUPABASE_ANON_KEY')||'sb_publishable_Fngj-vd-XZZjKimf92c9YA_EfIiYOY-').trim();
+      window.supabase.createClient(_u,_k).auth.signOut();
+    }
+  }catch(e){}
+  localStorage.removeItem('POS_USER'); location.href='login.html';
+}
 function sessionLabel(){ return POS_SESSION ? `${POS_SESSION.displayName || POS_SESSION.username} · ${currentPortal==='hq'?'HQ':currentBranchName}` : 'Demo'; }
 
 const HQ_NAV=[
