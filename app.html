@@ -94,7 +94,7 @@
   .hqdrop-btn .caret{font-size:9px;opacity:.6;transition:.2s}
   .hqdrop.open .hqdrop-btn{border-color:#d4af37}
   .hqdrop.open .hqdrop-btn .caret{transform:rotate(180deg)}
-  .hqdrop-menu{position:absolute;top:calc(100% + 7px);right:0;min-width:240px;max-width:calc(100vw - 40px);background:var(--card);border:1px solid var(--line);border-radius:13px;box-shadow:0 16px 44px rgba(0,0,0,.22);padding:8px;z-index:1300;display:none;max-height:360px;overflow:auto}
+  .hqdrop-menu{position:fixed;left:0;top:0;min-width:230px;background:var(--card);border:1px solid var(--line);border-radius:13px;box-shadow:0 16px 44px rgba(0,0,0,.22);padding:8px;z-index:3000;display:none;max-height:70vh;overflow:auto}
   .hqdrop.open .hqdrop-menu{display:block;animation:hqpop .14s ease}
   @keyframes hqpop{from{opacity:0;transform:translateY(-5px)}to{opacity:1;transform:translateY(0)}}
   .hqdrop-item{display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:9px;font-weight:700;font-size:13px;color:var(--text);cursor:pointer;white-space:nowrap}
@@ -2161,17 +2161,29 @@ loadLocalState();
 
 /* ---------- FINAL USER CLEANUP PATCH: reports, routing, image hint, calculations ---------- */
 var salesReportRange = (typeof salesReportRange !== 'undefined' && salesReportRange) ? salesReportRange : 'today';
-function setSalesReportRange(r){ salesReportRange=r; render(); }
-function reportRangeLabel(){return ({today:'1 day(s)',yesterday:'Yesterday',last7:'Last 7 days',month:'This month',lastmonth:'Last month',custom:'Custom'}[salesReportRange]||'1 day(s)');}
+var customStart = (typeof customStart!=='undefined'&&customStart)?customStart:'';
+var customEnd = (typeof customEnd!=='undefined'&&customEnd)?customEnd:'';
+function setSalesReportRange(r){ if(r==='custom'){ pickCustomDate(); return; } salesReportRange=r; render(); }
+function pickCustomDate(){
+  openFormModal('Custom Date Range',[{name:'from',label:'From',type:'date',value:customStart||localDateKey(new Date())},{name:'to',label:'To',type:'date',value:customEnd||localDateKey(new Date())}],d=>{
+    customStart=d.from||''; customEnd=d.to||''; salesReportRange='custom'; render();
+  });
+}
+function reportRangeLabel(){ if(salesReportRange==='custom'&&customStart) return customStart+' → '+(customEnd||customStart); return ({today:'1 day(s)',yesterday:'Yesterday',lastweek:'Last week',last7:'Last 7 days',last30:'Last 30 days',month:'This month',lastmonth:'Last month',custom:'Custom'}[salesReportRange]||'1 day(s)'); }
 function dateObjFromKey(k){const parts=String(k||'').split('-').map(Number); if(parts.length===3)return new Date(parts[0],parts[1]-1,parts[2]); const p2=String(k||'').split('/').map(Number); if(p2.length===2)return new Date(new Date().getFullYear(),p2[1]-1,p2[0]); return new Date(k);}
 function saleInRange(s){
   const key=normalizeSaleKey(s.key||s.date||todayKey()); const d=dateObjFromKey(key); const now=new Date(); const today=localDateKey(now);
   const y=new Date(now); y.setDate(y.getDate()-1); const yk=localDateKey(y);
+  const midnight=(dt)=>new Date(dt.getFullYear(),dt.getMonth(),dt.getDate());
+  const endToday=new Date(now.getFullYear(),now.getMonth(),now.getDate(),23,59,59);
   if(salesReportRange==='today') return key===today;
   if(salesReportRange==='yesterday') return key===yk;
-  if(salesReportRange==='last7'){ const start=new Date(now); start.setDate(start.getDate()-6); return d>=new Date(start.getFullYear(),start.getMonth(),start.getDate()) && d<=new Date(now.getFullYear(),now.getMonth(),now.getDate(),23,59,59); }
+  if(salesReportRange==='last7'){ const start=new Date(now); start.setDate(start.getDate()-6); return d>=midnight(start) && d<=endToday; }
+  if(salesReportRange==='last30'){ const start=new Date(now); start.setDate(start.getDate()-29); return d>=midnight(start) && d<=endToday; }
+  if(salesReportRange==='lastweek'){ const dow=(now.getDay()+6)%7; const thisMon=new Date(now); thisMon.setDate(now.getDate()-dow); const lastMon=new Date(thisMon); lastMon.setDate(thisMon.getDate()-7); const lastSun=new Date(thisMon); lastSun.setDate(thisMon.getDate()-1); return d>=midnight(lastMon) && d<=new Date(lastSun.getFullYear(),lastSun.getMonth(),lastSun.getDate(),23,59,59); }
   if(salesReportRange==='month') return d.getFullYear()===now.getFullYear() && d.getMonth()===now.getMonth();
   if(salesReportRange==='lastmonth'){ const lm=new Date(now.getFullYear(),now.getMonth()-1,1); return d.getFullYear()===lm.getFullYear() && d.getMonth()===lm.getMonth(); }
+  if(salesReportRange==='custom'){ if(!customStart) return key===today; const cs=dateObjFromKey(customStart); const ce=dateObjFromKey(customEnd||customStart); return d>=midnight(cs) && d<=new Date(ce.getFullYear(),ce.getMonth(),ce.getDate(),23,59,59); }
   return key===today;
 }
 function filteredSalesBySelectedRange(){return salesLog.filter(s=>saleInRange(s));}
@@ -2611,15 +2623,19 @@ function hqToggleDrop(id){
 function hqPositionMenu(el){
   const btn=el.querySelector('.hqdrop-btn'), menu=el.querySelector('.hqdrop-menu');
   if(!btn||!menu) return;
+  menu.style.display='block';
   const r=btn.getBoundingClientRect();
+  const mw=Math.max(menu.offsetWidth,230), vw=window.innerWidth, vh=window.innerHeight;
+  let left=r.left;
+  if(left+mw>vw-12) left=vw-12-mw;
+  if(left<12) left=12;
+  let top=r.bottom+7;
+  const mh=menu.offsetHeight;
+  if(top+mh>vh-12) top=Math.max(12,r.top-7-mh);
   menu.style.position='fixed';
   menu.style.right='auto';
-  menu.style.top=(r.bottom+7)+'px';
-  const mw=Math.max(menu.offsetWidth,240);
-  let left=r.right-mw;
-  if(left+mw>window.innerWidth-12) left=window.innerWidth-12-mw;
-  if(left<12) left=12;
   menu.style.left=left+'px';
+  menu.style.top=top+'px';
 }
 function hqReopenDrop(){ if(_hqOpenDrop){ const el=document.getElementById(_hqOpenDrop); if(el){ el.classList.add('open'); hqPositionMenu(el); } } }
 document.addEventListener('click',e=>{ if(!e.target.closest('.hqdrop')){ document.querySelectorAll('.hqdrop.open').forEach(d=>d.classList.remove('open')); _hqOpenDrop=null; } });
@@ -2636,7 +2652,7 @@ function outletDropdown(stateName){
   return `<div class="hqdrop" id="${id}"><button class="hqdrop-btn" onclick="hqToggleDrop('${id}')">${label}<span class="caret">▼</span></button><div class="hqdrop-menu"><label class="hqdrop-item ${all?'active':''}"><input type="checkbox" ${all?'checked':''} onchange="setBranchMulti('${stateName}','all',this.checked)"> Select All</label><div class="hqdrop-sep"></div>${items}</div></div>`;
 }
 function dateDropdown(){
-  const opts=[['today','Today'],['yesterday','Yesterday'],['last7','Last 7 Days'],['month','This Month'],['lastmonth','Last Month'],['custom','Custom']];
+  const opts=[['today','Today'],['yesterday','Yesterday'],['lastweek','Last Week'],['last7','Last 7 Days'],['last30','Last 30 Days'],['month','This Month'],['lastmonth','Last Month'],['custom','Custom Date']];
   const cur=(opts.find(o=>o[0]===salesReportRange)||opts[0])[1];
   const id='drop_date';
   const items=opts.map(o=>`<div class="hqdrop-item ${salesReportRange===o[0]?'active':''}" onclick="_hqOpenDrop=null;setSalesReportRange('${o[0]}')">${o[1]}</div>`).join('');
