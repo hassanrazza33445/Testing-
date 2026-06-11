@@ -77,6 +77,31 @@
   .red-pill{background:#241416;color:#b42323}
   .green-pill{background:#dcfce7;color:#15803d}
   .blue-pill{background:#2a2417;color:#8a6d1a}
+  /* ---- Branch chips + compact branch dropdown ---- */
+  .bchk{display:inline-flex;align-items:center;gap:9px;padding:8px 14px;border-radius:999px;border:1px solid rgba(212,175,55,.35);background:rgba(212,175,55,.07);font-weight:800;font-size:13px;color:var(--text);cursor:pointer;white-space:nowrap;transition:.15s;line-height:1}
+  .bchk:hover{background:rgba(212,175,55,.15);border-color:rgba(212,175,55,.6)}
+  .bchk input{appearance:auto;width:16px;height:16px;min-width:16px;margin:0;accent-color:#d4af37;cursor:pointer;flex:none}
+  .bchk:has(input:checked){background:rgba(212,175,55,.2);border-color:#d4af37}
+  .branch-chip-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
+  .branch-filter{display:inline-flex;align-items:center;gap:10px;margin:0 0 16px;padding:8px 14px;border:1px solid var(--line);border-radius:12px;background:var(--card)}
+  .branch-filter>label{font-size:11px;font-weight:900;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin:0}
+  .branch-filter select{width:200px;max-width:100%;padding:8px 10px}
+  /* ---- HQ top-right filter dropdowns (outlet + date) ---- */
+  .hqbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+  .hqdrop{position:relative;display:inline-block}
+  .hqdrop-btn{display:inline-flex;align-items:center;gap:9px;padding:10px 15px;border:1px solid var(--line);border-radius:11px;background:var(--card);color:var(--text);font-weight:800;font-size:13px;cursor:pointer;white-space:nowrap;transition:.15s}
+  .hqdrop-btn:hover{border-color:#d4af37;background:rgba(212,175,55,.06)}
+  .hqdrop-btn .caret{font-size:9px;opacity:.6;transition:.2s}
+  .hqdrop.open .hqdrop-btn{border-color:#d4af37}
+  .hqdrop.open .hqdrop-btn .caret{transform:rotate(180deg)}
+  .hqdrop-menu{position:absolute;top:calc(100% + 7px);right:0;min-width:240px;background:var(--card);border:1px solid var(--line);border-radius:13px;box-shadow:0 16px 44px rgba(0,0,0,.22);padding:8px;z-index:1300;display:none;max-height:360px;overflow:auto}
+  .hqdrop.open .hqdrop-menu{display:block;animation:hqpop .14s ease}
+  @keyframes hqpop{from{opacity:0;transform:translateY(-5px)}to{opacity:1;transform:translateY(0)}}
+  .hqdrop-item{display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:9px;font-weight:700;font-size:13px;color:var(--text);cursor:pointer;white-space:nowrap}
+  .hqdrop-item:hover{background:rgba(212,175,55,.12)}
+  .hqdrop-item.active{background:rgba(212,175,55,.18);color:#caa53a}
+  .hqdrop-item input{appearance:auto;width:16px;height:16px;min-width:16px;margin:0;accent-color:#d4af37;cursor:pointer;flex:none}
+  .hqdrop-sep{height:1px;background:var(--line);margin:6px 4px}
   .detail-body{padding:17px}
   .order-info{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:15px}
   .info-box{background:#1e1e27;border:1px solid var(--line);border-radius:10px;padding:12px}
@@ -2469,16 +2494,19 @@ const BRANCH_NAV_WAITER=[
 ];
 
 function hqDashboardView(){
-  const bl=getBranchList();
-  const paidToday=(salesLog||[]).filter(r=>normalizeSaleKey(r.key||r.date||todayKey())===todayKey());
+  const allB=getBranchList();
+  const sel=hqReportBranches;
+  const bl=(!Array.isArray(sel)||sel.includes('all'))?allB:allB.filter(b=>sel.includes(b.id));
+  const inFilter=r=>branchAllowed(r.branchId||r.branch_id||'subang',sel);
+  const paidToday=(salesLog||[]).filter(r=>normalizeSaleKey(r.key||r.date||todayKey())===todayKey()&&inFilter(r));
   const totalSales=paidToday.reduce((s,r)=>s+Number(r.sales||r.total||0),0);
-  const totalOrders=(orders||[]).length+paidToday.length;
+  const totalOrders=(orders||[]).filter(inFilter).length+paidToday.length;
   const branchRows=bl.map(b=>{
     const branchSales=paidToday.filter(r=>(r.branchId||r.branch_id||'subang')===b.id).reduce((s,r)=>s+Number(r.sales||0),0);
     const branchOrders=(orders||[]).filter(o=>(o.branchId||o.branch_id||'subang')===b.id).length + paidToday.filter(r=>(r.branchId||r.branch_id||'subang')===b.id).length;
     return [`<b>${b.name}</b>`,branchOrders,rm(branchSales),`<span class="pill green-pill">Active</span>`];
   });
-  return head('HQ Dashboard','Owner view · All branches overview')+
+  return head('HQ Dashboard','Owner view · All branches overview',hqActions('reports',{}))+
     `<div class="stats"><div class="stat"><small>Total Sales Today</small><h2>${rm(totalSales)}</h2></div><div class="stat"><small>Total Orders</small><h2>${totalOrders}</h2></div><div class="stat"><small>Branches</small><h2>${bl.length}</h2></div><div class="stat"><small>Logged In</small><h2 style="font-size:18px">${sessionLabel()}</h2></div></div>`+
     `<section class="panel" style="padding:18px;margin-bottom:16px"><h3>HQ Controls</h3><p style="color:var(--muted);margin:8px 0 14px">Use HQ to manage branches, create staff logins, assign roles, manage menu pricing per branch, and view all reports.</p><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn blue" onclick="go('branches')">Manage Branches</button><button class="btn light" onclick="go('staff')">Add Staff Login</button><button class="btn light" onclick="go('menu')">HQ Menu Pricing</button><button class="btn light" onclick="go('reports')">View Reports</button></div></section>`+
     panelTable(['Branch','Orders Today','Sales Today','Status'],branchRows);
@@ -2534,9 +2562,9 @@ function singleBranchSelector(key,label='Branch'){
 function branchMultiSelector(stateName,selected,title='Branches'){
   const sel=Array.isArray(selected)&&selected.length?selected:['all'];
   const checked=id=>sel.includes('all')||sel.includes(id);
-  return `<section class="panel" style="padding:14px 18px;margin-bottom:14px"><b>${title}</b><div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px">
-    <label class="pill"><input type="checkbox" ${sel.includes('all')?'checked':''} onchange="setBranchMulti('${stateName}','all',this.checked)"> All Branches</label>
-    ${branchListSafe().map(b=>`<label class="pill"><input type="checkbox" ${checked(b.id)?'checked':''} onchange="setBranchMulti('${stateName}','${b.id}',this.checked)"> ${b.name}</label>`).join('')}
+  return `<section class="panel" style="padding:14px 18px;margin-bottom:14px"><b>${title}</b><div class="branch-chip-row">
+    <label class="bchk"><input type="checkbox" ${sel.includes('all')?'checked':''} onchange="setBranchMulti('${stateName}','all',this.checked)"> All Branches</label>
+    ${branchListSafe().map(b=>`<label class="bchk"><input type="checkbox" ${checked(b.id)?'checked':''} onchange="setBranchMulti('${stateName}','${b.id}',this.checked)"> ${b.name}</label>`).join('')}
   </div></section>`;
 }
 function setBranchMulti(stateName,id,on){
@@ -2546,7 +2574,44 @@ function setBranchMulti(stateName,id,on){
   if(!arr.length) arr=['all'];
   if(stateName==='reports'){ hqReportBranches=arr; localStorage.setItem('HQ_REPORT_BRANCHES',JSON.stringify(arr)); }
   else { hqAnalyticsBranches=arr; localStorage.setItem('HQ_ANALYTICS_BRANCHES',JSON.stringify(arr)); }
-  render();
+  render(); hqReopenDrop();
+}
+
+/* ---- EasyEat-style HQ filter dropdowns (Outlet multi-select + Date range) ---- */
+let _hqOpenDrop=null;
+function hqToggleDrop(id){
+  const el=document.getElementById(id); if(!el)return;
+  const willOpen=!el.classList.contains('open');
+  document.querySelectorAll('.hqdrop.open').forEach(d=>d.classList.remove('open'));
+  if(willOpen){ el.classList.add('open'); _hqOpenDrop=id; } else { _hqOpenDrop=null; }
+  if(window.event) window.event.stopPropagation();
+}
+function hqReopenDrop(){ if(_hqOpenDrop){ const el=document.getElementById(_hqOpenDrop); if(el) el.classList.add('open'); } }
+document.addEventListener('click',e=>{ if(!e.target.closest('.hqdrop')){ document.querySelectorAll('.hqdrop.open').forEach(d=>d.classList.remove('open')); _hqOpenDrop=null; } });
+
+function outletDropdown(stateName){
+  const sel = stateName==='analytics' ? hqAnalyticsBranches : hqReportBranches;
+  const all = !Array.isArray(sel) || sel.includes('all');
+  const list = branchListSafe();
+  const picked = all ? list.length : sel.filter(x=>x!=='all').length;
+  const label = all ? 'All Outlets' : (picked===1 ? branchNameById(sel.find(x=>x!=='all')) : picked+' Outlets');
+  const id='drop_outlet_'+stateName;
+  const items = list.map(b=>`<label class="hqdrop-item"><input type="checkbox" ${all||sel.includes(b.id)?'checked':''} onchange="setBranchMulti('${stateName}','${b.id}',this.checked)"> ${b.name}</label>`).join('');
+  return `<div class="hqdrop" id="${id}"><button class="hqdrop-btn" onclick="hqToggleDrop('${id}')">${label}<span class="caret">▼</span></button><div class="hqdrop-menu"><label class="hqdrop-item ${all?'active':''}"><input type="checkbox" ${all?'checked':''} onchange="setBranchMulti('${stateName}','all',this.checked)"> Select All</label><div class="hqdrop-sep"></div>${items}</div></div>`;
+}
+function dateDropdown(){
+  const opts=[['today','Today'],['yesterday','Yesterday'],['last7','Last 7 Days'],['month','This Month'],['lastmonth','Last Month'],['custom','Custom']];
+  const cur=(opts.find(o=>o[0]===salesReportRange)||opts[0])[1];
+  const id='drop_date';
+  const items=opts.map(o=>`<div class="hqdrop-item ${salesReportRange===o[0]?'active':''}" onclick="_hqOpenDrop=null;setSalesReportRange('${o[0]}')">${o[1]}</div>`).join('');
+  return `<div class="hqdrop" id="${id}"><button class="hqdrop-btn" onclick="hqToggleDrop('${id}')">${cur}<span class="caret">▼</span></button><div class="hqdrop-menu" style="min-width:190px">${items}</div></div>`;
+}
+function hqActions(stateName,opts={}){
+  let h='<div class="hqbar">';
+  if(currentPortal==='hq') h+=outletDropdown(stateName);
+  if(opts.date) h+=dateDropdown();
+  if(opts.extra) h+=opts.extra;
+  return h+'</div>';
 }
 function branchAllowed(id,arr){ return !Array.isArray(arr)||arr.includes('all')||arr.includes(id||'subang'); }
 function normalizeBranchOnRows(){
@@ -2594,9 +2659,7 @@ reportView=function(){
   const chartRows=trendRowsForSales(list,'sales');
   const total=tableRows.reduce((s,r)=>s+r.sales,0), ordersCount=tableRows.reduce((s,r)=>s+r.orders,0), avg=ordersCount?total/ordersCount:0;
   const best=tableRows.slice().sort((a,b)=>b.sales-a.sales)[0];
-  const filter=currentPortal==='hq'?branchMultiSelector('reports',hqReportBranches,'Branch Filter'):'';
-  return head(currentPortal==='hq'?'All Branch Reports':'Sales Report','Smart POS · '+reportRangeLabel(),'<button class="btn dark" onclick="window.print()">Download Report</button>')+
-  filter+rangeFilterButtons()+
+  return head(currentPortal==='hq'?'All Branch Reports':'Sales Report','Smart POS · '+reportRangeLabel(),hqActions('reports',{date:true,extra:'<button class="btn dark" onclick="window.print()">Download Report</button>'}))+
   `<div class="stats"><div class="stat"><small>Total Sales</small><h2>${rm(total)}</h2></div><div class="stat"><small>Total Orders</small><h2>${ordersCount}</h2></div><div class="stat"><small>Avg Order</small><h2>${rm(avg)}</h2></div><div class="stat"><small>Best Day</small><h2>${best?`${shortDate(best.key)} · ${rm(best.sales)}`:'—'}</h2></div></div>`+
   properLineGraph(chartRows,'sales','Day total')+panelTable(['Date','Day','Orders','Avg/Order','Sales'],tableRows.map(r=>[shortDate(r.key),dayName(r.key),r.orders,rm(r.orders?r.sales/r.orders:0),`<b>${rm(r.sales)}</b>`]));
 };
@@ -2609,8 +2672,7 @@ analyticsView=function(){
   const rows=Object.values(map).sort((a,b)=>dateObjFromKey(a.key)-dateObjFromKey(b.key));
   const total=rows.reduce((s,r)=>s+r.sales,0), count=rows.reduce((s,r)=>s+r.orders,0), avg=count?total/count:0;
   const typeSum=t=>paid.filter(r=>(r.type||'take')===t).reduce((s,r)=>s+Number(r.sales||0),0); const dine=typeSum('dine'), take=typeSum('take'), del=typeSum('delivery');
-  const filter=currentPortal==='hq'?branchMultiSelector('analytics',hqAnalyticsBranches,'Branch Filter'):'';
-  return head('Restaurant Analytics','Smart POS · Last 7 days')+filter+`<div class="stats"><div class="stat"><small>Total Revenue</small><h2>${rm(total)}</h2></div><div class="stat"><small>Order Count</small><h2>${count}</h2></div><div class="stat"><small>Avg Order</small><h2>${rm(avg)}</h2></div><div class="stat"><small>Peak Time</small><h2>8 PM</h2></div></div>`+properLineGraph(rows,'orders','Orders per day')+panelTable(['Order Type','Share','Revenue'],[['Dine-In',total?Math.round((dine/total)*100)+'%':'0%',rm(dine)],['Takeaway',total?Math.round((take/total)*100)+'%':'0%',rm(take)],['Delivery',total?Math.round((del/total)*100)+'%':'0%',rm(del)]]);
+  return head('Restaurant Analytics','Smart POS · Last 7 days',hqActions('analytics',{}))+`<div class="stats"><div class="stat"><small>Total Revenue</small><h2>${rm(total)}</h2></div><div class="stat"><small>Order Count</small><h2>${count}</h2></div><div class="stat"><small>Avg Order</small><h2>${rm(avg)}</h2></div><div class="stat"><small>Peak Time</small><h2>8 PM</h2></div></div>`+properLineGraph(rows,'orders','Orders per day')+panelTable(['Order Type','Share','Revenue'],[['Dine-In',total?Math.round((dine/total)*100)+'%':'0%',rm(dine)],['Takeaway',total?Math.round((take/total)*100)+'%':'0%',rm(take)],['Delivery',total?Math.round((del/total)*100)+'%':'0%',rm(del)]]);
 };
 
 function staffUserStore(){ try{return JSON.parse(localStorage.getItem('HQ_STAFF_USERS')||'[]')}catch(e){return []} }
@@ -2670,7 +2732,7 @@ staffView=function(){
 
 function branchCheckboxesHTML(selected){
   const sel=Array.isArray(selected)?selected:['all'];
-  return `<div style="grid-column:1/-1"><label>Select Branches</label><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><label class="pill"><input type="checkbox" class="promoBranch" value="all" ${sel.includes('all')?'checked':''}> All Branches</label>${branchListSafe().map(b=>`<label class="pill"><input type="checkbox" class="promoBranch" value="${b.id}" ${sel.includes('all')||sel.includes(b.id)?'checked':''}> ${b.name}</label>`).join('')}</div></div>`;
+  return `<div style="grid-column:1/-1"><label>Select Branches</label><div class="branch-chip-row"><label class="bchk"><input type="checkbox" class="promoBranch" value="all" ${sel.includes('all')?'checked':''}> All Branches</label>${branchListSafe().map(b=>`<label class="bchk"><input type="checkbox" class="promoBranch" value="${b.id}" ${sel.includes('all')||sel.includes(b.id)?'checked':''}> ${b.name}</label>`).join('')}</div></div>`;
 }
 function selectedPromoBranches(){ let vals=[...document.querySelectorAll('.promoBranch:checked')].map(x=>x.value); if(!vals.length||vals.includes('all')) return ['all']; return vals; }
 const _oldEditCouponBatch=editCoupon;
