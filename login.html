@@ -73,18 +73,50 @@ body{background:var(--bg);color:var(--text);min-height:100vh;display:grid;place-
       <p>Manage orders, tables, billing, staff, reports and inventory from one clean restaurant system.</p>
       <div class="mini-stats"><div class="mini"><b>24/7</b><span>Operations</span></div><div class="mini"><b>RM</b><span>Billing</span></div><div class="mini"><b>CSV</b><span>Reports</span></div></div>
     </div>
-    <p>Demo login: use any email and password to open the live POS preview.</p>
+    <p>Demo logins: HQ owner or branch staff. Use the credentials shown on this screen.</p>
   </section>
   <section class="form-side">
     <h2>Welcome back</h2>
     <p>Login to continue to your restaurant POS workspace.</p>
-    <div class="field"><label>Email Address</label><input class="input" type="email" placeholder="admin@stonixra.com"></div>
-    <div class="field"><label>Password</label><input class="input" type="password" placeholder="••••••••"></div>
+    <div class="field"><label>Username</label><input class="input" id="loginUser" type="text" placeholder="owner / Subang / Subangw1"></div>
+    <div class="field"><label>Password</label><input class="input" id="loginPass" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')loginPOS()"></div>
     <div class="row"><label><input type="checkbox" checked> Remember me</label><a href="#">Forgot password?</a></div>
-    <a class="btn blue" href="app.html">Login to Dashboard</a>
-    <a class="btn light" href="app.html">Open POS Demo</a>
-    <div class="note">This is a frontend demo version. Backend database, real authentication and live payment integration can be connected later.</div>
+    <button class="btn blue" onclick="loginPOS()" style="width:100%">Login to Dashboard</button>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px">
+      <button class="btn light" onclick="quickLogin('owner')">HQ Owner Demo</button>
+      <button class="btn light" onclick="quickLogin('Subang')">Subang Cashier Demo</button>
+    </div>
+    <div class="note">
+      <b>Demo credentials</b><br>
+      HQ Owner: <b>owner</b> / <b>owner123</b><br>
+      Subang Cashier: <b>Subang</b> / <b>Subang123</b><br>
+      Subang Waiter: <b>Subangw1</b> / <b>Subang1234</b>
+    </div>
   </section>
 </div>
+
+<script>
+const DEMO_USERS={
+  owner:{password:"owner123",portal:"hq",role:"owner",branchId:"all",branchName:"All Branches",displayName:"HQ Owner"},
+  admin:{password:"admin123",portal:"hq",role:"admin",branchId:"all",branchName:"All Branches",displayName:"HQ Admin"},
+  Subang:{password:"Subang123",portal:"branch",role:"cashier",branchId:"subang",branchName:"Subang",displayName:"Subang Branch Cashier"},
+  Subangw1:{password:"Subang1234",portal:"branch",role:"waiter",branchId:"subang",branchName:"Subang",displayName:"Subang Branch Waiter"},
+  Nilai:{password:"Nilai123",portal:"branch",role:"cashier",branchId:"nilai",branchName:"Nilai",displayName:"Nilai Branch Cashier"},
+  Puncak:{password:"Puncak123",portal:"branch",role:"cashier",branchId:"puncak",branchName:"Puncak Alam",displayName:"Puncak Branch Cashier"}
+};
+function quickLogin(username){
+  document.getElementById('loginUser').value=username;
+  document.getElementById('loginPass').value=DEMO_USERS[username].password;
+  loginPOS();
+}
+function loginPOS(){
+  const username=(document.getElementById('loginUser').value||'').trim();
+  const password=(document.getElementById('loginPass').value||'').trim();
+  const u=DEMO_USERS[username];
+  if(!u||u.password!==password){alert('Invalid username or password');return;}
+  localStorage.setItem('POS_USER',JSON.stringify({username,...u,loggedAt:new Date().toISOString()}));
+  location.href='app.html';
+}
+</script>
 </body>
 </html>

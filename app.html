@@ -605,10 +605,21 @@
       <div style="padding:18px">
         <div id="dishImgBox" onclick="pickDishImage()" style="height:150px;background:#23232e;border-radius:12px;display:grid;place-items:center;cursor:pointer;margin-bottom:16px;overflow:hidden"></div>
         <div class="field"><label>Dish Name</label><input id="dishName" placeholder="e.g. Chicken Tikka"></div>
-        <div class="field"><label>Price (RM)</label><input id="dishPrice" type="number" placeholder="0.00"></div>
+        <div class="field"><label>Price (RM)</label><input id="dishPrice" type="number" placeholder="0.00" oninput="if(dishBranchSamePrice)renderDishBranches(false)"></div>
         <div class="field"><label>Category</label><select id="dishCat" class="input" onchange="onDishCatChange()"></select>
           <input id="dishNewCat" class="input" placeholder="New category name" style="display:none;margin-top:8px"></div>
         <div class="field"><label>Description (optional)</label><input id="dishDesc" placeholder="Short description"></div>
+        <div class="field" id="dishBranchBlock">
+          <label>Branch Availability & Pricing</label>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+            <button type="button" class="chip active" id="dishSamePriceBtn" onclick="setDishPriceMode(true)">Same price</button>
+            <button type="button" class="chip" id="dishCustomPriceBtn" onclick="setDishPriceMode(false)">Custom price</button>
+            <button type="button" class="chip" onclick="selectAllDishBranches(true)">All branches</button>
+            <button type="button" class="chip" onclick="selectAllDishBranches(false)">Clear</button>
+          </div>
+          <div id="dishBranchRows" style="display:grid;gap:8px"></div>
+          <small style="display:block;margin-top:8px;color:var(--muted)">HQ me dish ek baar banegi. Yahan select karo kis branch me available hogi aur price same/custom set karo.</small>
+        </div>
         <div style="display:flex;gap:9px;margin-top:6px">
           <button class="btn blue" style="flex:1" onclick="saveDish()">Save Dish</button>
           <button class="btn light" id="dishDelete" onclick="deleteDish()" style="color:var(--red);border-color:#3a2424">Delete</button>
@@ -688,6 +699,7 @@ const cats=()=>["All",...new Set(MENU.map(m=>m.cat))];
 let menuCat="All";
 let imgTarget=null;
 let dishEditId=null, dishTempImg=null;
+let dishBranchSamePrice=true;
 
 const NAV=[
   {g:"Orders & Dining",items:[{k:"pos",l:"Orders Dashboard",badge:3},{k:"waiter",l:"Waiter Order Screen"},{k:"quickpos",l:"Quick POS Billing"},{k:"tables",l:"Tables"}]},
@@ -715,6 +727,10 @@ let expenses=[];
 let promos=[];
 let customers=[];
 let branches=[];
+const DEFAULT_BRANCHES=[{id:"subang",n:"Subang"},{id:"nilai",n:"Nilai"},{id:"puncak",n:"Puncak Alam"},{id:"ara",n:"Ara Damansara"}];
+const branchNameOf=b=>b.n||b.name||b.branch||b.id||String(b);
+const branchIdOf=b=>b.id||String(branchNameOf(b)).toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");
+function getBranchList(){const list=Array.isArray(branches)&&branches.length?branches:DEFAULT_BRANCHES;return list.map(b=>({id:branchIdOf(b),name:branchNameOf(b)}));}
 const PERMISSION_OPTIONS=["Full access","Orders Dashboard","Create Orders","Edit Orders","Settle Bills","Split Payment","Discount","Refund / Void","Print Receipts","Past Orders","Tables","Quick POS Billing","Reports","Restaurant Analytics","Daily Closing","Expenses","Menu & Dishes","Recipe Auto Stock","QR Table Ordering","Promotions","Staff Center","Roles & Permissions","Cashier Features","Daily Summary","Inventory","Auto KOT Printer","Multi Branch","Loyalty Points","Settings"];
 let rolePerms=[
   {role:"Admin",perms:[...PERMISSION_OPTIONS]},
@@ -1162,6 +1178,7 @@ function menuView(){
       <div class="dn">${m.name}</div><div class="dc">${m.cat}</div>
       ${m.desc?`<div style="font-size:11px;color:var(--muted);margin-top:4px">${m.desc}</div>`:''}
       <div class="dp">${rm(m.price)}</div>
+      ${Array.isArray(m.branchPrices)&&m.branchPrices.length?`<div style="font-size:11px;color:var(--muted);margin-top:4px">${m.branchPrices.filter(b=>b.available).length} branch(es) active</div>`:''}
     </div>
   </div>`).join("")}</div>`;
 }
@@ -1180,6 +1197,8 @@ function openDishModal(id){
   document.getElementById("dishModalTitle").textContent=id?"Edit Dish":"Add New Dish";
   document.getElementById("dishDelete").style.display=id?"inline-block":"none";
   renderDishImg();
+  dishBranchSamePrice=true;
+  setTimeout(()=>renderDishBranches(true),0);
   document.getElementById("dishModal").classList.add("show");
 }
 function closeDishModal(){document.getElementById("dishModal").classList.remove("show");}
@@ -1190,6 +1209,48 @@ function renderDishImg(){
 }
 function pickDishImage(){imgTarget="DISH";document.getElementById("imgInput").click();}
 function onDishCatChange(){const v=document.getElementById("dishCat").value;document.getElementById("dishNewCat").style.display=v==="__new"?"block":"none";}
+function setDishPriceMode(same){
+  dishBranchSamePrice=!!same;
+  const a=document.getElementById('dishSamePriceBtn'), b=document.getElementById('dishCustomPriceBtn');
+  if(a)a.classList.toggle('active',dishBranchSamePrice);
+  if(b)b.classList.toggle('active',!dishBranchSamePrice);
+  renderDishBranches();
+}
+function selectAllDishBranches(on){
+  document.querySelectorAll('.dish-branch-check').forEach(cb=>cb.checked=!!on);
+  renderDishBranches(false);
+}
+function existingBranchPriceMap(m){
+  const map={};
+  (m?.branchPrices||[]).forEach(x=>{map[x.branchId]={...x};});
+  return map;
+}
+function renderDishBranches(reset=true){
+  const box=document.getElementById('dishBranchRows'); if(!box)return;
+  const m=dishEditId?MENU.find(x=>x.id===dishEditId):null;
+  const map=existingBranchPriceMap(m);
+  const base=parseFloat(document.getElementById('dishPrice')?.value)||0;
+  const selectedNow={};
+  document.querySelectorAll('.dish-branch-check').forEach(cb=>{selectedNow[cb.dataset.id]=cb.checked});
+  const rows=getBranchList().map(br=>{
+    const old=map[br.id]||{};
+    const checked=reset?(old.available!==false && (old.branchId?true:true)):(selectedNow[br.id]!==false);
+    const price=dishBranchSamePrice?base:Number(old.price ?? base);
+    return `<div style="border:1px solid var(--line);border-radius:10px;padding:10px;background:var(--card)">
+      <div style="display:flex;align-items:center;gap:10px;justify-content:space-between;flex-wrap:wrap">
+        <label style="display:flex;align-items:center;gap:8px;font-weight:900;color:var(--text);margin:0"><input type="checkbox" class="dish-branch-check" data-id="${br.id}" data-name="${br.name}" ${checked?'checked':''}> ${br.name}</label>
+        <div style="display:flex;align-items:center;gap:6px"><span style="color:var(--muted);font-size:12px">Price</span><input class="input dish-branch-price" data-id="${br.id}" type="number" value="${price}" ${dishBranchSamePrice?'readonly':''} style="width:110px;padding:8px 10px"></div>
+      </div>
+    </div>`;
+  }).join('');
+  box.innerHTML=rows;
+}
+function getDishBranchPrices(basePrice){
+  return Array.from(document.querySelectorAll('.dish-branch-check')).map(cb=>{
+    const inp=document.querySelector(`.dish-branch-price[data-id="${cb.dataset.id}"]`);
+    return {branchId:cb.dataset.id,branchName:cb.dataset.name,price:parseFloat(inp?.value)||basePrice,available:cb.checked};
+  }).filter(x=>x.available);
+}
 function saveDish(){
   const name=document.getElementById("dishName").value.trim();
   if(!name){toast("Enter a dish name");return;}
@@ -1197,8 +1258,9 @@ function saveDish(){
   let cat=document.getElementById("dishCat").value;
   if(cat==="__new")cat=document.getElementById("dishNewCat").value.trim()||"Other";
   const desc=document.getElementById("dishDesc").value.trim();
-  if(dishEditId){const m=MENU.find(x=>x.id===dishEditId);if(m)Object.assign(m,{name,price,cat,desc,img:dishTempImg});toast(name+" updated");}
-  else{const id=MENU.length?Math.max(...MENU.map(m=>m.id))+1:1;MENU.push({id,name,price,cat,desc,img:dishTempImg});toast(name+" added");}
+  const branchPrices=getDishBranchPrices(price);
+  if(dishEditId){const m=MENU.find(x=>x.id===dishEditId);if(m)Object.assign(m,{name,price,cat,desc,img:dishTempImg,branchPrices});toast(name+" updated");}
+  else{const id=MENU.length?Math.max(...MENU.map(m=>m.id))+1:1;MENU.push({id,name,price,cat,desc,img:dishTempImg,branchPrices});toast(name+" added");}
   closeDishModal();render();
 }
 function deleteDish(){if(dishEditId){MENU=MENU.filter(m=>m.id!==dishEditId);toast("Dish deleted");closeDishModal();render();}}
@@ -2355,6 +2417,76 @@ window.render=function(){
   queueSave();
 };
 /* ---------- END CRITICAL FIX PATCH ---------- */
+
+/* ---------- HQ / BRANCH LOGIN ROUTING PATCH ---------- */
+const POS_SESSION = (()=>{try{return JSON.parse(localStorage.getItem('POS_USER')||'null')}catch(e){return null}})();
+if(!POS_SESSION){ location.href='login.html'; }
+let currentPortal = POS_SESSION?.portal || 'branch';
+let currentBranchId = POS_SESSION?.branchId || 'subang';
+let currentBranchName = POS_SESSION?.branchName || 'Subang';
+role = POS_SESSION?.role==='waiter' ? 'waiter' : 'cashier';
+
+function logoutPOS(){ localStorage.removeItem('POS_USER'); location.href='login.html'; }
+function sessionLabel(){ return POS_SESSION ? `${POS_SESSION.displayName || POS_SESSION.username} · ${currentPortal==='hq'?'HQ':currentBranchName}` : 'Demo'; }
+
+const HQ_NAV=[
+  {g:'HQ Portal',items:[{k:'hqdashboard',l:'HQ Dashboard'},{k:'branches',l:'Outlets / Branches'},{k:'staff',l:'Staff Center'},{k:'roles',l:'Roles & Permissions'}]},
+  {g:'Reports & Analytics',items:[{k:'reports',l:'All Branch Reports'},{k:'analytics',l:'Restaurant Analytics'},{k:'closing',l:'Daily Closing Review'}]},
+  {g:'Menu & Marketing',items:[{k:'menu',l:'HQ Menu & Dishes'},{k:'promotions',l:'Promotions'},{k:'qr',l:'QR Ordering'}]},
+  {g:'Operations',items:[{k:'inventory',l:'Inventory'},{k:'expenses',l:'Expenses'},{k:'recipes',l:'Recipe Auto Stock'},{k:'kotprinter',l:'Printer / KOT'}]},
+  {g:'Customers & Settings',items:[{k:'loyalty',l:'Loyalty Points'},{k:'settings',l:'Settings'}]}
+];
+const BRANCH_NAV_CASHIER=[
+  {g:'Orders & Dining',items:[{k:'pos',l:'Orders Dashboard'},{k:'quickpos',l:'Quick POS Billing'},{k:'tables',l:'Tables'}]},
+  {g:'Reports & Closing',items:[{k:'reports',l:'Reports'},{k:'closing',l:'Daily Closing'},{k:'analytics',l:'Restaurant Analytics'}]},
+  {g:'Branch Operations',items:[{k:'customers',l:'Daily Summary'},{k:'expenses',l:'Expenses'},{k:'inventory',l:'Inventory'},{k:'qr',l:'QR Ordering'},{k:'kotprinter',l:'Printer / KOT'}]},
+  {g:'Settings',items:[{k:'settings',l:'Branch Settings'}]}
+];
+const BRANCH_NAV_WAITER=[
+  {g:'Waiter',items:[{k:'waiter',l:'Waiter Order Screen'},{k:'tables',l:'Tables'}]}
+];
+
+function hqDashboardView(){
+  const bl=getBranchList();
+  const paidToday=(salesLog||[]).filter(r=>normalizeSaleKey(r.key||r.date||todayKey())===todayKey());
+  const totalSales=paidToday.reduce((s,r)=>s+Number(r.sales||r.total||0),0);
+  const totalOrders=(orders||[]).length+paidToday.length;
+  const branchRows=bl.map(b=>{
+    const branchSales=paidToday.filter(r=>(r.branchId||r.branch_id||'subang')===b.id).reduce((s,r)=>s+Number(r.sales||0),0);
+    const branchOrders=(orders||[]).filter(o=>(o.branchId||o.branch_id||'subang')===b.id).length + paidToday.filter(r=>(r.branchId||r.branch_id||'subang')===b.id).length;
+    return [`<b>${b.name}</b>`,branchOrders,rm(branchSales),`<span class="pill green-pill">Active</span>`];
+  });
+  return head('HQ Dashboard','Owner view · All branches overview')+
+    `<div class="stats"><div class="stat"><small>Total Sales Today</small><h2>${rm(totalSales)}</h2></div><div class="stat"><small>Total Orders</small><h2>${totalOrders}</h2></div><div class="stat"><small>Branches</small><h2>${bl.length}</h2></div><div class="stat"><small>Logged In</small><h2 style="font-size:18px">${sessionLabel()}</h2></div></div>`+
+    `<section class="panel" style="padding:18px;margin-bottom:16px"><h3>HQ Controls</h3><p style="color:var(--muted);margin:8px 0 14px">Use HQ to manage branches, create staff logins, assign roles, manage menu pricing per branch, and view all reports.</p><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn blue" onclick="go('branches')">Manage Branches</button><button class="btn light" onclick="go('staff')">Add Staff Login</button><button class="btn light" onclick="go('menu')">HQ Menu Pricing</button><button class="btn light" onclick="go('reports')">View Reports</button></div></section>`+
+    panelTable(['Branch','Orders Today','Sales Today','Status'],branchRows);
+}
+
+const OLD_RENDER_NAV = renderNav;
+renderNav=function(){
+  const navData=currentPortal==='hq' ? HQ_NAV : (role==='waiter'?BRANCH_NAV_WAITER:BRANCH_NAV_CASHIER);
+  document.getElementById('nav').innerHTML=navData.map(g=>`<div class="group-title">${g.g}</div>${g.items.map(it=>`<div class="nav-link ${nav===it.k?'active':''}" onclick="go('${it.k}')"><span class="ic"></span><span>${it.l}</span>${it.badge?`<span class="badge">${it.badge}</span>`:''}</div>`).join('')}`).join('');
+  const brandTitle=currentPortal==='hq'?'Stonixra HQ':`${currentBranchName} Branch`;
+  restaurantName=currentPortal==='hq'?'Stonixra HQ':`${currentBranchName} POS`;
+  document.getElementById('brandName').textContent=brandTitle;
+  document.getElementById('tbTitle').textContent=brandTitle;
+  const bl=document.getElementById('brandLogo'); if(bl)bl.innerHTML=logoImg?`<img src="${logoImg}">`:(currentPortal==='hq'?'HQ':currentBranchName.charAt(0));
+  const switcher=document.querySelector('.role-switch'); if(switcher) switcher.style.display=currentPortal==='hq'?'none':'flex';
+  const logoutBtn=document.querySelector('.logout'); if(logoutBtn){logoutBtn.onclick=logoutPOS; logoutBtn.textContent='⎋ Log Out';}
+};
+
+window.render=function(){
+  const m=document.getElementById('main'); if(!m)return;
+  const map={hqdashboard:hqDashboardView,pos:posView,waiter:waiterView,quickpos:quickPosView,tables:tablesView,reports:reportView,closing:closingView,analytics:analyticsView,menu:menuView,recipes:recipesView,qr:qrView,promotions:promoView,staff:staffView,roles:rolesView,cashier:cashierFeaturesView,customers:customerFeaturesView,inventory:invView,expenses:expensesView,kotprinter:kotPrinterView,branches:branchesView,loyalty:loyaltyView,settings:settingsView};
+  const fn=map[nav]|| (currentPortal==='hq'?hqDashboardView:posView);
+  try{ m.innerHTML=fn(); }catch(e){ console.error(e); m.innerHTML=`<section class="panel" style="padding:20px"><h2>Screen error</h2><p>${String(e.message||e)}</p></section>`; }
+  queueSave();
+};
+
+const OLD_GO=window.go;
+window.go=function(k){ nav=k; renderNav(); render(); };
+nav=currentPortal==='hq'?'hqdashboard':(role==='waiter'?'waiter':'pos');
+/* ---------- END HQ / BRANCH LOGIN ROUTING PATCH ---------- */
 
 applyThemePref();
 renderNav();render();hydrated=true;

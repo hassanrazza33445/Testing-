@@ -54,6 +54,7 @@ const cats=()=>["All",...new Set(MENU.map(m=>m.cat))];
 let menuCat="All";
 let imgTarget=null;
 let dishEditId=null, dishTempImg=null;
+let dishBranchSamePrice=true;
 
 const NAV=[
   {g:"Orders & Dining",items:[{k:"pos",l:"Orders Dashboard",badge:3},{k:"waiter",l:"Waiter Order Screen"},{k:"quickpos",l:"Quick POS Billing"},{k:"tables",l:"Tables"}]},
@@ -81,6 +82,10 @@ let expenses=[];
 let promos=[];
 let customers=[];
 let branches=[];
+const DEFAULT_BRANCHES=[{id:"subang",n:"Subang"},{id:"nilai",n:"Nilai"},{id:"puncak",n:"Puncak Alam"},{id:"ara",n:"Ara Damansara"}];
+const branchNameOf=b=>b.n||b.name||b.branch||b.id||String(b);
+const branchIdOf=b=>b.id||String(branchNameOf(b)).toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");
+function getBranchList(){const list=Array.isArray(branches)&&branches.length?branches:DEFAULT_BRANCHES;return list.map(b=>({id:branchIdOf(b),name:branchNameOf(b)}));}
 const PERMISSION_OPTIONS=["Full access","Orders Dashboard","Create Orders","Edit Orders","Settle Bills","Split Payment","Discount","Refund / Void","Print Receipts","Past Orders","Tables","Quick POS Billing","Reports","Restaurant Analytics","Daily Closing","Expenses","Menu & Dishes","Recipe Auto Stock","QR Table Ordering","Promotions","Staff Center","Roles & Permissions","Cashier Features","Daily Summary","Inventory","Auto KOT Printer","Multi Branch","Loyalty Points","Settings"];
 let rolePerms=[
   {role:"Admin",perms:[...PERMISSION_OPTIONS]},
@@ -528,6 +533,7 @@ function menuView(){
       <div class="dn">${m.name}</div><div class="dc">${m.cat}</div>
       ${m.desc?`<div style="font-size:11px;color:var(--muted);margin-top:4px">${m.desc}</div>`:''}
       <div class="dp">${rm(m.price)}</div>
+      ${Array.isArray(m.branchPrices)&&m.branchPrices.length?`<div style="font-size:11px;color:var(--muted);margin-top:4px">${m.branchPrices.filter(b=>b.available).length} branch(es) active</div>`:''}
     </div>
   </div>`).join("")}</div>`;
 }
@@ -546,6 +552,8 @@ function openDishModal(id){
   document.getElementById("dishModalTitle").textContent=id?"Edit Dish":"Add New Dish";
   document.getElementById("dishDelete").style.display=id?"inline-block":"none";
   renderDishImg();
+  dishBranchSamePrice=true;
+  setTimeout(()=>renderDishBranches(true),0);
   document.getElementById("dishModal").classList.add("show");
 }
 function closeDishModal(){document.getElementById("dishModal").classList.remove("show");}
@@ -556,6 +564,48 @@ function renderDishImg(){
 }
 function pickDishImage(){imgTarget="DISH";document.getElementById("imgInput").click();}
 function onDishCatChange(){const v=document.getElementById("dishCat").value;document.getElementById("dishNewCat").style.display=v==="__new"?"block":"none";}
+function setDishPriceMode(same){
+  dishBranchSamePrice=!!same;
+  const a=document.getElementById('dishSamePriceBtn'), b=document.getElementById('dishCustomPriceBtn');
+  if(a)a.classList.toggle('active',dishBranchSamePrice);
+  if(b)b.classList.toggle('active',!dishBranchSamePrice);
+  renderDishBranches();
+}
+function selectAllDishBranches(on){
+  document.querySelectorAll('.dish-branch-check').forEach(cb=>cb.checked=!!on);
+  renderDishBranches(false);
+}
+function existingBranchPriceMap(m){
+  const map={};
+  (m?.branchPrices||[]).forEach(x=>{map[x.branchId]={...x};});
+  return map;
+}
+function renderDishBranches(reset=true){
+  const box=document.getElementById('dishBranchRows'); if(!box)return;
+  const m=dishEditId?MENU.find(x=>x.id===dishEditId):null;
+  const map=existingBranchPriceMap(m);
+  const base=parseFloat(document.getElementById('dishPrice')?.value)||0;
+  const selectedNow={};
+  document.querySelectorAll('.dish-branch-check').forEach(cb=>{selectedNow[cb.dataset.id]=cb.checked});
+  const rows=getBranchList().map(br=>{
+    const old=map[br.id]||{};
+    const checked=reset?(old.available!==false && (old.branchId?true:true)):(selectedNow[br.id]!==false);
+    const price=dishBranchSamePrice?base:Number(old.price ?? base);
+    return `<div style="border:1px solid var(--line);border-radius:10px;padding:10px;background:var(--card)">
+      <div style="display:flex;align-items:center;gap:10px;justify-content:space-between;flex-wrap:wrap">
+        <label style="display:flex;align-items:center;gap:8px;font-weight:900;color:var(--text);margin:0"><input type="checkbox" class="dish-branch-check" data-id="${br.id}" data-name="${br.name}" ${checked?'checked':''}> ${br.name}</label>
+        <div style="display:flex;align-items:center;gap:6px"><span style="color:var(--muted);font-size:12px">Price</span><input class="input dish-branch-price" data-id="${br.id}" type="number" value="${price}" ${dishBranchSamePrice?'readonly':''} style="width:110px;padding:8px 10px"></div>
+      </div>
+    </div>`;
+  }).join('');
+  box.innerHTML=rows;
+}
+function getDishBranchPrices(basePrice){
+  return Array.from(document.querySelectorAll('.dish-branch-check')).map(cb=>{
+    const inp=document.querySelector(`.dish-branch-price[data-id="${cb.dataset.id}"]`);
+    return {branchId:cb.dataset.id,branchName:cb.dataset.name,price:parseFloat(inp?.value)||basePrice,available:cb.checked};
+  }).filter(x=>x.available);
+}
 function saveDish(){
   const name=document.getElementById("dishName").value.trim();
   if(!name){toast("Enter a dish name");return;}
@@ -563,8 +613,9 @@ function saveDish(){
   let cat=document.getElementById("dishCat").value;
   if(cat==="__new")cat=document.getElementById("dishNewCat").value.trim()||"Other";
   const desc=document.getElementById("dishDesc").value.trim();
-  if(dishEditId){const m=MENU.find(x=>x.id===dishEditId);if(m)Object.assign(m,{name,price,cat,desc,img:dishTempImg});toast(name+" updated");}
-  else{const id=MENU.length?Math.max(...MENU.map(m=>m.id))+1:1;MENU.push({id,name,price,cat,desc,img:dishTempImg});toast(name+" added");}
+  const branchPrices=getDishBranchPrices(price);
+  if(dishEditId){const m=MENU.find(x=>x.id===dishEditId);if(m)Object.assign(m,{name,price,cat,desc,img:dishTempImg,branchPrices});toast(name+" updated");}
+  else{const id=MENU.length?Math.max(...MENU.map(m=>m.id))+1:1;MENU.push({id,name,price,cat,desc,img:dishTempImg,branchPrices});toast(name+" added");}
   closeDishModal();render();
 }
 function deleteDish(){if(dishEditId){MENU=MENU.filter(m=>m.id!==dishEditId);toast("Dish deleted");closeDishModal();render();}}
