@@ -95,7 +95,8 @@
   .hqdrop.open .hqdrop-btn{border-color:#d4af37}
   .hqdrop.open .hqdrop-btn .caret{transform:rotate(180deg)}
   .hqdrop-menu{position:fixed;left:0;top:0;min-width:230px;background:var(--card);border:1px solid var(--line);border-radius:13px;box-shadow:0 16px 44px rgba(0,0,0,.22);padding:8px;z-index:3000;display:none;max-height:70vh;overflow:auto}
-  .hqdrop.open .hqdrop-menu{display:block;animation:hqpop .14s ease}
+  .hqdrop .hqdrop-menu{display:none!important}
+  #hqLiveMenu{animation:hqpop .14s ease}
   @keyframes hqpop{from{opacity:0;transform:translateY(-5px)}to{opacity:1;transform:translateY(0)}}
   .hqdrop-item{display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:9px;font-weight:700;font-size:13px;color:var(--text);cursor:pointer;white-space:nowrap}
   .hqdrop-item:hover{background:rgba(212,175,55,.12)}
@@ -2608,12 +2609,23 @@ function branchMultiSelector(stateName,selected,title='Branches'){
   </div></section>`;
 }
 function setBranchMulti(stateName,id,on){
+  const allIds=branchListSafe().map(b=>b.id);
   let arr = stateName==='reports' ? hqReportBranches : hqAnalyticsBranches;
-  if(id==='all') arr = on ? ['all'] : [];
-  else { arr = arr.filter(x=>x!=='all'); if(on && !arr.includes(id)) arr.push(id); if(!on) arr=arr.filter(x=>x!==id); }
-  if(!arr.length) arr=['all'];
-  if(stateName==='reports'){ hqReportBranches=arr; localStorage.setItem('HQ_REPORT_BRANCHES',JSON.stringify(arr)); }
-  else { hqAnalyticsBranches=arr; localStorage.setItem('HQ_ANALYTICS_BRANCHES',JSON.stringify(arr)); }
+  // expand 'all' sentinel into explicit ids so individual toggles work
+  let cur = (!Array.isArray(arr)||arr.includes('all')) ? allIds.slice() : arr.slice();
+  if(id==='all'){
+    cur = on ? allIds.slice() : [];
+  } else {
+    if(on){ if(!cur.includes(id)) cur.push(id); }
+    else { cur = cur.filter(x=>x!==id); }
+  }
+  // normalise: every branch selected -> store ['all']; never store empty (fallback to all)
+  let out;
+  if(cur.length && allIds.every(x=>cur.includes(x))) out=['all'];
+  else if(cur.length) out=cur;
+  else out=['all'];
+  if(stateName==='reports'){ hqReportBranches=out; localStorage.setItem('HQ_REPORT_BRANCHES',JSON.stringify(out)); }
+  else { hqAnalyticsBranches=out; localStorage.setItem('HQ_ANALYTICS_BRANCHES',JSON.stringify(out)); }
   render(); hqReopenDrop();
 }
 
@@ -2790,9 +2802,16 @@ staffCheckOut=function(i){
 };
 staffView=function(){
   normalizeBranchOnRows(); const today=todayKey(); const present=staff.filter(s=>s.s==='On Duty').length; const checkedOut=staff.filter(s=>s.checkoutDate===today).length; const totalHours=staff.reduce((a,s)=>a+Number(s.hours||0),0);
-  const rows=staff.map((s,i)=>{let action=''; if(s.s==='On Duty'||(s.ci&&s.ci!=='-'&&!s.co)) action=`<button class="btn green" onclick="staffCheckOut(${i})">Check Out</button>`; else if(s.checkoutDate===today) action='<span class="pill green-pill">Completed Today</span>'; else action=`<button class="btn blue" onclick="staffCheckIn(${i})">Check In</button>`; return [`<b>${escHtml(s.u)}</b><br><button class="chip" onclick="viewStaffProfile(${i})">View Profile</button>`,s.d||'-',s.l||'Main Branch',s.ci||'-',s.co||'-',`${Number(s.hours||0).toFixed(2)} hrs`,pill(s.s||'Absent',s.s==='Absent'?'red':'green'),action];});
+  const rows=staff.map((s,i)=>{let action=''; if(s.s==='On Duty'||(s.ci&&s.ci!=='-'&&!s.co)) action=`<button class="btn green" onclick="staffCheckOut(${i})">Check Out</button>`; else if(s.checkoutDate===today) action='<span class="pill green-pill">Completed Today</span>'; else action=`<button class="btn blue" onclick="staffCheckIn(${i})">Check In</button>`; return [`<b>${escHtml(s.u)}</b><br><button class="chip" onclick="viewStaffProfile(${i})">View Profile</button>`,s.d||'-',s.l||'Main Branch',s.ci||'-',s.co||'-',`${Number(s.hours||0).toFixed(2)} hrs`,pill(s.s||'Absent',s.s==='Absent'?'red':'green'),action+` <button class="chip" onclick="editStaff(${i})">Edit</button> <button class="chip" style="color:var(--red)" onclick="deleteStaff(${i})">Delete</button>`];});
   return head('Staff Center','Attendance, check-in/check-out and working hours',`<button class="btn light" onclick="addStaff()">+ Add Staff</button><button class="btn dark" onclick="downloadCSV('staff-attendance',['User','Designation','Location','CheckIn','CheckOut','Hours','Status'],staff.map(s=>[s.u,s.d,s.l,s.ci||'-',s.co||'-',s.hours||0,s.s]))">Download Attendance</button>`)+`<div class="stats"><div class="stat"><small>Total Staff</small><h2>${staff.length}</h2></div><div class="stat"><small>On Duty</small><h2>${present}</h2></div><div class="stat"><small>Completed Today</small><h2>${checkedOut}</h2></div><div class="stat"><small>Total Hours</small><h2>${totalHours.toFixed(2)}</h2></div></div>`+panelTable(['Staff','Role','Branch','Check In','Check Out','Hours','Status','Action'],rows);
 };
+function deleteStaff(i){
+  const s=staff[i]; if(!s) return;
+  if(!confirm('Delete staff "'+(s.u||'')+'"? This cannot be undone.')) return;
+  staff.splice(i,1);
+  try{ let u=JSON.parse(localStorage.getItem('HQ_STAFF_USERS')||'[]'); u=u.filter(x=>x.displayName!==s.u && x.username!==s.u); localStorage.setItem('HQ_STAFF_USERS',JSON.stringify(u)); }catch(e){}
+  toast('Staff deleted'); render(); if(typeof queueSave==='function') queueSave();
+}
 
 function branchCheckboxesHTML(selected){
   const sel=Array.isArray(selected)&&selected.length?selected:['all'];
