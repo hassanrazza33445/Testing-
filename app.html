@@ -1953,7 +1953,7 @@ function syncTablesWithOrders(){
   (tables||[]).forEach(t=>{const key=String(t.n).padStart(2,'0'); t.occ=activeTables.has(key);});
 }
 const _oldSavePaidSale = savePaidSale;
-savePaidSale=function(o,method){_oldSavePaidSale(o,method); if(o&&o.table)setTableAuto(o.table,'available'); queueSave();};
+savePaidSale=function(o,method){_oldSavePaidSale(o,method); if(o&&o.table)setTableAuto(o.table,'available'); const last=(salesLog||[])[salesLog.length-1]; if(last&&last.no===(o&&o.no)) pushCloudSale(last); queueSave();};
 const _oldCreateOrder = createOrder;
 createOrder=function(){
   if(!cart.length)return;
@@ -2582,7 +2582,7 @@ function hqDashboardView(){
   (selAll?allB:allB.filter(b=>sel.includes(b.id))).forEach(b=>{agg[b.name]={o:0,s:0};});
   paidToday.forEach(r=>{ const L=labelFor(r); if(!agg[L])agg[L]={o:0,s:0}; agg[L].o++; agg[L].s+=Number(r.sales||0); });
   const branchRows=Object.keys(agg).map(name=>[`<b>${name}</b>`,agg[name].o,rm(agg[name].s),`<span class="pill green-pill">Active</span>`]);
-  return head('HQ Dashboard','Owner view · All branches overview',hqActions('reports',{}))+
+  return head('HQ Dashboard','Owner view · All branches overview',hqActions('reports',{extra:'<button class="btn light" onclick="syncCloudSales(false)">↻ Sync Sales</button>'}))+
     `<div class="stats"><div class="stat"><small>Total Sales Today</small><h2>${rm(totalSales)}</h2></div><div class="stat"><small>Total Orders</small><h2>${totalOrders}</h2></div><div class="stat"><small>Branches</small><h2>${allB.length}</h2></div><div class="stat"><small>Logged In</small><h2 style="font-size:18px">${sessionLabel()}</h2></div></div>`+
     `<section class="panel" style="padding:18px;margin-bottom:16px"><h3>HQ Controls</h3><p style="color:var(--muted);margin:8px 0 14px">Use HQ to manage branches, create staff logins, assign roles, manage menu pricing per branch, and view all reports.</p><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn blue" onclick="go('branches')">Manage Branches</button><button class="btn light" onclick="go('staff')">Add Staff Login</button><button class="btn light" onclick="go('menu')">HQ Menu Pricing</button><button class="btn light" onclick="go('reports')">View Reports</button></div></section>`+
     panelTable(['Branch','Orders Today','Sales Today','Status'],branchRows);
@@ -2960,6 +2960,39 @@ normalizeBranchOnRows();
 applyThemePref();
 renderNav();render();hydrated=true;
 if(dbReady){loadCloud(); setInterval(loadCloudSilent,6000);}
+
+/* ===== Durable per-sale cloud table (fixes multi-branch HQ sync) ===== */
+async function pushCloudSale(sale){
+  try{
+    if(!sale) return; if(!initSupabase()||!db) return;
+    await db.from('sales').insert({
+      no: sale.no||'', branch_id: sale.branchId||currentBranchId||'', branch_name: sale.branchName||currentBranchName||'',
+      sale_date: sale.key||localDateKey(new Date()), amount: Number(sale.sales||0),
+      method: sale.method||sale.pay||'Cash', order_type: sale.type||'', items: sale.itemsList||[]
+    });
+  }catch(e){}
+}
+async function syncCloudSales(silent){
+  try{
+    if(!initSupabase()||!db){ if(!silent)toast('Supabase not connected'); return; }
+    const {data,error}=await db.from('sales').select('*').order('id',{ascending:false}).limit(3000);
+    if(error||!data){ if(!silent)toast('Sales sync failed'); return; }
+    const keyOf=s=>(s.no||'')+'|'+(s.branchId||s.branch_id||'')+'|'+(s.key||s.sale_date||'');
+    const have=new Set((salesLog||[]).map(keyOf));
+    let added=0;
+    data.forEach(r=>{
+      const k=(r.no||'')+'|'+(r.branch_id||'')+'|'+(r.sale_date||'');
+      if(have.has(k)) return;
+      salesLog.push({key:r.sale_date,sales:Number(r.amount||0),method:r.method,type:r.order_type,no:r.no,branchId:r.branch_id,branchName:r.branch_name,itemsList:r.items||[],itemsCount:(r.items||[]).reduce((s,i)=>s+(i.qty||0),0),time:'',_cloud:true});
+      have.add(k); added++;
+    });
+    if(added){ if(typeof saveLocalState==='function')saveLocalState(); render(); }
+    if(!silent) toast(added?('Synced '+added+' new sales'):'Already up to date');
+  }catch(e){ if(!silent)toast('Sales sync error'); }
+}
+// Pull all-branch sales on boot, then keep refreshing so HQ stays live
+setTimeout(()=>syncCloudSales(true),1500);
+setInterval(()=>syncCloudSales(true),20000);
 if(role==="waiter"){document.getElementById("roleCashier").classList.remove("active");document.getElementById("roleWaiter").classList.add("active");}
 if(role==="kitchen"){document.getElementById("roleCashier").classList.remove("active");document.getElementById("roleKitchen")?.classList.add("active");}
 if(role==="tandoor"){document.getElementById("roleCashier").classList.remove("active");document.getElementById("roleTandoor")?.classList.add("active");}
