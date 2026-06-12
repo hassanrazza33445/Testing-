@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <meta name="theme-color" content="#1a1713">
-<link rel="manifest" href="manifest.json">
+
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -664,7 +664,7 @@
   <div class="modal-overlay" id="modal">
     <div class="modal">
       <div class="m-menu">
-        <div class="m-head"><h3>New Order <span style="font-size:11px;font-weight:800;color:#fff;background:#16a34a;padding:2px 8px;border-radius:20px;vertical-align:middle">v8 NEW</span></h3><button class="x" onclick="closeModal()">×</button></div>
+        <div class="m-head"><h3>New Order <span style="font-size:10px;font-weight:700;color:var(--muted);vertical-align:middle">v8</span></h3><button class="x" onclick="closeModal()">×</button></div>
         <div class="m-search"><div class="ssearch">🔍 <input id="msearch" placeholder="Search dish..." oninput="renderMenuGrid()"></div><div class="m-cats" id="mcats"></div></div>
         <div class="mgrid" id="mgrid"></div>
       </div>
@@ -1627,10 +1627,11 @@ let db=null, dbReady=false, hydrated=false, saveTimer=null;
 const DEFAULT_SUPABASE_URL="https://xhvuyjrulhppicxwdtxq.supabase.co";
 const DEFAULT_SUPABASE_ANON_KEY="sb_publishable_Fngj-vd-XZZjKimf92c9YA_EfIiYOY-";
 function initSupabase(){
+  if(db&&dbReady) return true;
   const url=(localStorage.getItem("SUPABASE_URL")||DEFAULT_SUPABASE_URL).trim();
   const key=(localStorage.getItem("SUPABASE_ANON_KEY")||DEFAULT_SUPABASE_ANON_KEY).trim();
   if(!url||!key||!window.supabase){db=null;dbReady=false;return false;}
-  db=window.supabase.createClient(url,key);
+  db=window.supabase.createClient(url,key,{auth:{storageKey:'sb-stonixra-main',persistSession:true}});
   dbReady=true;
   return true;
 }
