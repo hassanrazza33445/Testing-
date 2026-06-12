@@ -193,9 +193,9 @@
   .mitem{border:1px solid var(--line);border-radius:12px;cursor:pointer;background:#16161d;overflow:hidden}
   .mitem:hover{border-color:var(--blue);box-shadow:0 4px 12px rgba(20,30,60,.08)}
   .mitem:active{transform:scale(.96)}
-  .mitem .mimg{height:66px;background:#23232e;display:grid;place-items:center;color:#55514a;overflow:hidden}
+  .mitem .mimg{height:104px;background:#23232e;display:grid;place-items:center;color:#55514a;overflow:hidden}
   .mitem .mimg img{width:100%;height:100%;object-fit:cover}
-  .mitem .mb{padding:9px}.mitem .mn{font-size:11.5px;font-weight:700;line-height:1.25}.mitem .mp{margin-top:5px;font-weight:900;color:var(--blue)}
+  .mitem .mb{padding:10px}.mitem .mn{font-size:12.5px;font-weight:800;line-height:1.3;min-height:32px}.mitem .mp{margin-top:6px;font-weight:900;font-size:14px;color:var(--blue)}
   .m-cart{width:320px;border-left:1px solid var(--line);background:#1e1e27;display:flex;flex-direction:column}
   .m-types{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:14px}
   .m-type{border:0;border-radius:9px;padding:11px 4px;background:#16161d;color:var(--muted);font-weight:800;font-size:11px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:5px;border:1px solid var(--line)}
@@ -2794,16 +2794,34 @@ addStaff=function(){
   const b=branchListSafe();
   openFormModal('Add Staff / User Login',[
     {name:'u',label:'Staff Name',required:true,placeholder:'e.g. Ahmed'},
-    {name:'d',label:'Role',type:'select',value:'Cashier',options:['Cashier','Waiter','Kitchen','Tandoor','Manager','Admin','Inventory Manager']},
+    {name:'d',label:'Role',type:'select',value:'Cashier',options:['Cashier','Waiter','Manager','Admin (HQ)']},
     {name:'branchId',label:'Branch',type:'select',value:b[0]?.id||'subang',options:b.map(x=>x.id)},
-    {name:'username',label:'Username',required:true,placeholder:'e.g. subangcashier'},
-    {name:'password',label:'Password',required:true,placeholder:'e.g. Subang123'},
+    {name:'email',label:'Login Email',required:true,placeholder:'e.g. cashier@stonixra.pos'},
+    {name:'password',label:'Password',required:true,placeholder:'min 6 characters'},
     {name:'pin',label:'4 Digit PIN',type:'number',value:'1234',note:'Used to unlock POS after auto-lock'}
   ],d=>{
-    const branchId=d.branchId||'subang'; const branchName=branchNameById(branchId);
-    staff.push({u:d.u.trim(),d:d.d||'Staff',l:branchName,branchId,username:d.username,password:d.password,pin:String(d.pin||'1234').slice(0,4),s:'Absent',ci:'-',co:'',hours:0,history:[]});
-    addOrUpdateLoginUser(d.username,d.password,String(d.pin||'1234').slice(0,4),'branch',d.d,branchId,branchName,d.u.trim());
-    toast('Staff login created');
+    const email=(d.email||'').trim().toLowerCase();
+    const password=(d.password||'').trim();
+    if(!email||!password){ toast('Email and password required'); return false; }
+    if(password.length<6){ toast('Password must be at least 6 characters'); return false; }
+    const branchId=d.branchId||'subang', branchName=branchNameById(branchId);
+    const isHQ=(d.d==='Admin (HQ)');
+    const portal=isHQ?'hq':'branch';
+    const role=isHQ?'owner':(d.d==='Waiter'?'waiter':'cashier');
+    staff.push({u:d.u.trim(),d:d.d||'Staff',l:branchName,branchId,username:email,email,pin:String(d.pin||'1234').slice(0,4),s:'Absent',ci:'-',co:'',hours:0,history:[]});
+    toast('Creating login...');
+    (async()=>{
+      try{
+        const U=(localStorage.getItem('SUPABASE_URL')||'https://xhvuyjrulhppicxwdtxq.supabase.co').trim();
+        const K=(localStorage.getItem('SUPABASE_ANON_KEY')||'sb_publishable_Fngj-vd-XZZjKimf92c9YA_EfIiYOY-').trim();
+        if(!window.supabase){ toast('Supabase not loaded'); return; }
+        const sb2=window.supabase.createClient(U,K,{auth:{storageKey:'sb-staffcreate-'+Date.now(),persistSession:false,autoRefreshToken:false}});
+        const {error}=await sb2.auth.signUp({email,password,options:{data:{portal,role,branch_id:branchId,branch_name:branchName,display_name:d.u.trim()}}});
+        try{ await sb2.auth.signOut(); }catch(e){}
+        if(error){ toast('Login error: '+error.message); }
+        else { toast('Staff login created: '+email); render(); if(typeof queueSave==='function') queueSave(); }
+      }catch(e){ toast('Login create failed'); }
+    })();
   });
 };
 function staffRecordDateOK(rec){
