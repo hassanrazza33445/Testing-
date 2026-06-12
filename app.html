@@ -2965,20 +2965,21 @@ if(dbReady){loadCloud(); setInterval(loadCloudSilent,6000);}
 async function pushCloudSale(sale){
   try{
     if(!sale) return; if(!initSupabase()||!db) return;
-    await db.from('sales').insert({
+    const {error}=await db.from('sales').insert({
       no: sale.no||'', branch_id: sale.branchId||currentBranchId||'', branch_name: sale.branchName||currentBranchName||'',
       sale_date: sale.key||localDateKey(new Date()), amount: Number(sale.sales||0),
       method: sale.method||sale.pay||'Cash', order_type: sale.type||'', items: sale.itemsList||[]
     });
-  }catch(e){}
+    if(error) toast('Cloud sale save failed: '+(error.message||error.code||'check SQL'));
+  }catch(e){ toast('Cloud sale error: '+(e.message||e)); }
 }
 async function syncCloudSales(silent){
   try{
     if(!initSupabase()||!db){ if(!silent)toast('Supabase not connected'); return; }
     const {data,error}=await db.from('sales').select('*').order('id',{ascending:false}).limit(3000);
-    if(error||!data){ if(!silent)toast('Sales sync failed'); return; }
-    const keyOf=s=>(s.no||'')+'|'+(s.branchId||s.branch_id||'')+'|'+(s.key||s.sale_date||'');
-    const have=new Set((salesLog||[]).map(keyOf));
+    if(error){ if(!silent)toast('Sales table error: '+(error.message||error.code||'check SQL ran')); return; }
+    if(!data){ if(!silent)toast('No data returned from sales'); return; }
+    const have=new Set((salesLog||[]).map(s=>(s.no||'')+'|'+(s.branchId||s.branch_id||'')+'|'+(s.key||s.sale_date||'')));
     let added=0;
     data.forEach(r=>{
       const k=(r.no||'')+'|'+(r.branch_id||'')+'|'+(r.sale_date||'');
@@ -2987,8 +2988,8 @@ async function syncCloudSales(silent){
       have.add(k); added++;
     });
     if(added){ if(typeof saveLocalState==='function')saveLocalState(); render(); }
-    if(!silent) toast(added?('Synced '+added+' new sales'):'Already up to date');
-  }catch(e){ if(!silent)toast('Sales sync error'); }
+    if(!silent) toast('Cloud has '+data.length+' sales · added '+added+' new to HQ');
+  }catch(e){ if(!silent)toast('Sync error: '+(e.message||e)); }
 }
 // Pull all-branch sales on boot, then keep refreshing so HQ stays live
 setTimeout(()=>syncCloudSales(true),1500);
