@@ -1016,6 +1016,8 @@ function savePaidSale(o,method){
       method:o.pay,
       type:o.type,
       no:o.no,
+      branchId:currentBranchId,
+      branchName:currentBranchName,
       table:o.table || '',
       itemsCount:o.items.reduce((s,i)=>s+i.qty,0),
       itemsList:o.items.map(i=>({id:i.id,name:i.name,price:i.price,qty:i.qty,cat:i.cat||MENU.find(m=>m.id===i.id)?.cat})),
@@ -1485,7 +1487,8 @@ function qrView(){
 // Barcode Scanner removed from production POS.
 
 /* ---------- MULTI BRANCH ---------- */
-function branchesView(){const total=branches.reduce((s,b)=>s+b.sales,0);return head("Multi Branch","Branch performance and online/offline status",'<button class="btn blue" onclick="addBranch()">+ Add Branch</button>')+`<div class="stats"><div class="stat"><small>Branches</small><h2>${branches.length}</h2></div><div class="stat"><small>Total Branch Sales</small><h2>${rm(total)}</h2></div><div class="stat"><small>Online</small><h2>${branches.filter(b=>b.status==='Online').length}</h2></div><div class="stat"><small>Offline</small><h2>${branches.filter(b=>b.status!=='Online').length}</h2></div></div>`+panelTable(["Branch","Orders","Sales","Status"],branches.map((b,i)=>[`<b>${b.n}</b>`,b.orders,rm(b.sales),`<span class="pill ${b.status==='Online'?'green-pill':'red-pill'}" onclick="branches[${i}].status=branches[${i}].status==='Online'?'Offline':'Online';render()" style="cursor:pointer">${b.status}</span>`]));}
+function branchesView(){const total=branches.reduce((s,b)=>s+b.sales,0);return head("Multi Branch","Branch performance and online/offline status",'<button class="btn blue" onclick="addBranch()">+ Add Branch</button>')+`<div class="stats"><div class="stat"><small>Branches</small><h2>${branches.length}</h2></div><div class="stat"><small>Total Branch Sales</small><h2>${rm(total)}</h2></div><div class="stat"><small>Online</small><h2>${branches.filter(b=>b.status==='Online').length}</h2></div><div class="stat"><small>Offline</small><h2>${branches.filter(b=>b.status!=='Online').length}</h2></div></div>`+panelTable(["Branch","Orders","Sales","Status","Action"],branches.map((b,i)=>[`<b>${b.n}</b>`,b.orders,rm(b.sales),`<span class="pill ${b.status==='Online'?'green-pill':'red-pill'}" onclick="branches[${i}].status=branches[${i}].status==='Online'?'Offline':'Online';render()" style="cursor:pointer">${b.status}</span>`,`<button class="chip" style="color:var(--red)" onclick="deleteBranch(${i})">Delete</button>`]));}
+function deleteBranch(i){const b=branches[i];if(!b)return;if(!confirm('Delete branch "'+(b.n||'')+'"? This cannot be undone.'))return;branches.splice(i,1);toast('Branch deleted');render();if(typeof queueSave==='function')queueSave();}
 function addBranch(){openFormModal('Add Branch',[{name:'n',label:'Branch name'}],d=>{if(!d.n)return;branches.push({n:d.n,orders:0,sales:0,status:'Online'});toast('Branch added');});}
 
 /* ---------- ROLES / PERMISSIONS ---------- */
@@ -2566,18 +2569,21 @@ const BRANCH_NAV_WAITER=[
 function hqDashboardView(){
   const allB=getBranchList();
   const sel=hqReportBranches;
-  const bl=(!Array.isArray(sel)||sel.includes('all'))?allB:allB.filter(b=>sel.includes(b.id));
-  const inFilter=r=>branchAllowed(r.branchId||r.branch_id||'subang',sel);
-  const paidToday=(salesLog||[]).filter(r=>normalizeSaleKey(r.key||r.date||todayKey())===todayKey()&&inFilter(r));
+  const selAll=(!Array.isArray(sel)||sel.includes('all'));
+  const nm=v=>String(v||'').trim().toLowerCase();
+  const inFilter=r=>{ if(selAll) return true; const bn=nm(r.branchName); return sel.some(id=>id===r.branchId || nm(branchNameById(id))===bn); };
+  const isToday=r=>normalizeSaleKey(r.key||r.date||todayKey())===todayKey();
+  const paidToday=(salesLog||[]).filter(r=>isToday(r)&&inFilter(r));
   const totalSales=paidToday.reduce((s,r)=>s+Number(r.sales||r.total||0),0);
-  const totalOrders=(orders||[]).filter(inFilter).length+paidToday.length;
-  const branchRows=bl.map(b=>{
-    const branchSales=paidToday.filter(r=>(r.branchId||r.branch_id||'subang')===b.id).reduce((s,r)=>s+Number(r.sales||0),0);
-    const branchOrders=(orders||[]).filter(o=>(o.branchId||o.branch_id||'subang')===b.id).length + paidToday.filter(r=>(r.branchId||r.branch_id||'subang')===b.id).length;
-    return [`<b>${b.name}</b>`,branchOrders,rm(branchSales),`<span class="pill green-pill">Active</span>`];
-  });
+  const totalOrders=(orders||[]).length+paidToday.length;
+  // match a sale to a configured branch label (by id, then name); else use its own label
+  const labelFor=r=>{ const byId=allB.find(b=>b.id===r.branchId); if(byId)return byId.name; const byName=allB.find(b=>nm(b.name)===nm(r.branchName)); if(byName)return byName.name; return r.branchName||'Unassigned'; };
+  const agg={};
+  (selAll?allB:allB.filter(b=>sel.includes(b.id))).forEach(b=>{agg[b.name]={o:0,s:0};});
+  paidToday.forEach(r=>{ const L=labelFor(r); if(!agg[L])agg[L]={o:0,s:0}; agg[L].o++; agg[L].s+=Number(r.sales||0); });
+  const branchRows=Object.keys(agg).map(name=>[`<b>${name}</b>`,agg[name].o,rm(agg[name].s),`<span class="pill green-pill">Active</span>`]);
   return head('HQ Dashboard','Owner view · All branches overview',hqActions('reports',{}))+
-    `<div class="stats"><div class="stat"><small>Total Sales Today</small><h2>${rm(totalSales)}</h2></div><div class="stat"><small>Total Orders</small><h2>${totalOrders}</h2></div><div class="stat"><small>Branches</small><h2>${bl.length}</h2></div><div class="stat"><small>Logged In</small><h2 style="font-size:18px">${sessionLabel()}</h2></div></div>`+
+    `<div class="stats"><div class="stat"><small>Total Sales Today</small><h2>${rm(totalSales)}</h2></div><div class="stat"><small>Total Orders</small><h2>${totalOrders}</h2></div><div class="stat"><small>Branches</small><h2>${allB.length}</h2></div><div class="stat"><small>Logged In</small><h2 style="font-size:18px">${sessionLabel()}</h2></div></div>`+
     `<section class="panel" style="padding:18px;margin-bottom:16px"><h3>HQ Controls</h3><p style="color:var(--muted);margin:8px 0 14px">Use HQ to manage branches, create staff logins, assign roles, manage menu pricing per branch, and view all reports.</p><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn blue" onclick="go('branches')">Manage Branches</button><button class="btn light" onclick="go('staff')">Add Staff Login</button><button class="btn light" onclick="go('menu')">HQ Menu Pricing</button><button class="btn light" onclick="go('reports')">View Reports</button></div></section>`+
     panelTable(['Branch','Orders Today','Sales Today','Status'],branchRows);
 }
