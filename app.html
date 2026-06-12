@@ -193,9 +193,11 @@
   .mitem{border:1px solid var(--line);border-radius:12px;cursor:pointer;background:#16161d;overflow:hidden}
   .mitem:hover{border-color:var(--blue);box-shadow:0 4px 12px rgba(20,30,60,.08)}
   .mitem:active{transform:scale(.96)}
-  .mitem .mimg{height:104px;background:#23232e;display:grid;place-items:center;color:#55514a;overflow:hidden}
+  .mitem .mimg{height:112px;background:#23232e;display:grid;place-items:center;color:#55514a;overflow:hidden}
   .mitem .mimg img{width:100%;height:100%;object-fit:cover}
-  .mitem .mb{padding:10px}.mitem .mn{font-size:12.5px;font-weight:800;line-height:1.3;min-height:32px}.mitem .mp{margin-top:6px;font-weight:900;font-size:14px;color:var(--blue)}
+  .mitem .mb{padding:10px 10px 12px;background:var(--card);border-top:1px solid var(--line)}
+  .mitem .mn{font-size:13px;font-weight:800;line-height:1.3;min-height:34px;color:var(--text)}
+  .mitem .mp{margin-top:6px;font-weight:900;font-size:15px;color:var(--blue)}
   .m-cart{width:320px;border-left:1px solid var(--line);background:#1e1e27;display:flex;flex-direction:column}
   .m-types{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:14px}
   .m-type{border:0;border-radius:9px;padding:11px 4px;background:#16161d;color:var(--muted);font-weight:800;font-size:11px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:5px;border:1px solid var(--line)}
@@ -1609,7 +1611,7 @@ function closeModal(){document.getElementById("modal").classList.remove("show");
 function renderTypes(){document.getElementById("mtypes").innerHTML=TYPES.map(t=>`<button class="m-type ${cType===t.k?'active':''}" onclick="cType='${t.k}';renderTypes();toggleTbl()">${t.s}<small>${t.l}</small></button>`).join("");}
 function toggleTbl(){document.getElementById("mtable").style.display=cType==="dine"?"block":"none";}
 function renderCats(){document.getElementById("mcats").innerHTML=cats().map(c=>`<button class="chip ${mCat===c?'active':''}" onclick="mCat='${c}';renderCats();renderMenuGrid()">${c}</button>`).join("");}
-function renderMenuGrid(){const q=(document.getElementById("msearch").value||"").toLowerCase();const list=MENU.filter(m=>(mCat==="All"||m.cat===mCat)&&m.name.toLowerCase().includes(q));document.getElementById("mgrid").innerHTML=list.map(m=>`<button class="mitem" onclick="addCart(${m.id})"><div class="mimg">${m.img?`<img src="${m.img}">`:'🍽'}</div><div class="mb"><div class="mn">${m.name}</div><div class="mp">${rm(m.price)}</div></div></button>`).join("");}
+function renderMenuGrid(){const q=(document.getElementById("msearch").value||"").toLowerCase();const list=MENU.filter(m=>(mCat==="All"||m.cat===mCat)&&(m.name||"").toLowerCase().includes(q));document.getElementById("mgrid").innerHTML=list.length?list.map(m=>`<button class="mitem" onclick="addCart(${m.id})"><div class="mimg">${m.img?`<img src="${m.img}" alt="">`:'🍽'}</div><div class="mb"><div class="mn">${m.name||'Item'}</div><div class="mp">${rm(m.price||0)}</div></div></button>`).join(""):'<div style="grid-column:1/-1;text-align:center;color:var(--muted);padding:30px">No items found</div>';}
 function addCart(id){const m=MENU.find(x=>x.id===id),e=cart.find(i=>i.id===id);if(e)e.qty++;else cart.push({id:m.id,name:m.name,price:m.price,qty:1});renderCart();}
 function chg(id,d){const i=cart.find(x=>x.id===id);i.qty+=d;if(i.qty<=0)cart=cart.filter(x=>x.id!==id);renderCart();}
 function renderCart(){const lines=document.getElementById("mlines");lines.innerHTML=cart.length?cart.map(i=>`<div class="m-line"><div class="ml-n">${i.name}</div><button class="step" onclick="chg(${i.id},-1)">−</button><div class="ml-q">${i.qty}</div><button class="step" onclick="chg(${i.id},1)">+</button><div class="ml-p">${rm(i.price*i.qty)}</div></div>`).join(""):'<div class="empty">Tap items to add</div>';
@@ -2997,125 +2999,6 @@ setInterval(()=>syncCloudSales(true),20000);
 if(role==="waiter"){document.getElementById("roleCashier").classList.remove("active");document.getElementById("roleWaiter").classList.add("active");}
 if(role==="kitchen"){document.getElementById("roleCashier").classList.remove("active");document.getElementById("roleKitchen")?.classList.add("active");}
 if(role==="tandoor"){document.getElementById("roleCashier").classList.remove("active");document.getElementById("roleTandoor")?.classList.add("active");}
-
-/* ===== PROFESSIONAL MULTI-PRINTER SETTINGS PATCH ===== */
-const PRINTER_STATIONS=['Main Kitchen','BBQ','Tandoor','Drinks'];
-const PRINTER_ROLES=['Kitchen','Receipt','KOT + Receipt','QR / Label'];
-var printerSettings = (typeof globalThis.printerSettings==='object' && globalThis.printerSettings) ? globalThis.printerSettings : {};
-function printerBranchId(){ return currentModuleBranch ? currentModuleBranch('kotprinter') : (currentBranchId||'subang'); }
-function defaultBranchPrinterConfig(br){
-  return {
-    branchId:br,
-    autoKot:true,
-    autoReceipt:false,
-    browserPrint:true,
-    copies:1,
-    printers:[],
-    mappings:{'Main Kitchen':'','BBQ':'','Tandoor':'','Drinks':'','Receipt':''}
-  };
-}
-function getPrinterConfig(br=printerBranchId()){
-  if(!printerSettings || typeof printerSettings!=='object') printerSettings={};
-  if(!printerSettings[br]) printerSettings[br]=defaultBranchPrinterConfig(br);
-  const c=printerSettings[br];
-  c.printers=Array.isArray(c.printers)?c.printers:[];
-  c.mappings=c.mappings||{};
-  PRINTER_STATIONS.forEach(s=>{ if(c.mappings[s]===undefined)c.mappings[s]=''; });
-  if(c.mappings.Receipt===undefined)c.mappings.Receipt='';
-  c.copies=Number(c.copies||1);
-  return c;
-}
-function printerById(br,id){ return getPrinterConfig(br).printers.find(p=>p.id===id); }
-function printerLabel(p){ return p?`${p.name}${p.ip?' · '+p.ip:''}`:'Not selected'; }
-function printerModeNote(){ return `<div class="admin-lock" style="margin:0 0 14px;background:rgba(212,175,55,.10);border-color:rgba(212,175,55,.35);color:var(--text)">Important: Website version can save printer IP/settings and test via browser print. Direct RAW IP auto-print will work later through Android APK / local print bridge. For now, set Windows default printer as Kitchen Printer for automatic browser/kiosk print.</div>`; }
-function stationPrinterName(st,br=printerBranchId()){
-  const cfg=getPrinterConfig(br); const id=cfg.mappings[st]||cfg.mappings['Main Kitchen']||''; const p=printerById(br,id); return p?printerLabel(p):'Browser Default Printer';
-}
-function printerStatsHtml(cfg){
-  const active=cfg.printers.filter(p=>p.active!==false).length;
-  const wifi=cfg.printers.filter(p=>p.type==='WiFi/LAN').length;
-  return `<div class="stats"><div class="stat"><small>Auto KOT</small><h2 style="color:${cfg.autoKot?'var(--green)':'var(--red)'}">${cfg.autoKot?'ON':'OFF'}</h2></div><div class="stat"><small>Saved Printers</small><h2>${cfg.printers.length}</h2></div><div class="stat"><small>WiFi/LAN Printers</small><h2>${wifi}</h2></div><div class="stat"><small>Active</small><h2>${active}</h2></div></div>`;
-}
-function mappingSelect(br,station){
-  const cfg=getPrinterConfig(br); const val=cfg.mappings[station]||'';
-  return `<select class="input" onchange="setPrinterMapping('${br}','${station}',this.value)"><option value="">Browser Default Printer</option>${cfg.printers.map(p=>`<option value="${p.id}" ${p.id===val?'selected':''}>${printerLabel(p)}</option>`).join('')}</select>`;
-}
-kotPrinterView=function(){
-  const br=printerBranchId(); const cfg=getPrinterConfig(br);
-  const rows=cfg.printers.map(p=>[
-    `<b>${p.name}</b><br><small style="color:var(--muted)">${p.role||'Kitchen'} · ${p.paper||'80mm'}</small>`,
-    p.type||'WiFi/LAN',
-    p.type==='WiFi/LAN'?`${p.ip||'-'}:${p.port||9100}`:(p.systemName||'Windows default'),
-    `<span class="pill ${p.active!==false?'green-pill':'red-pill'}" onclick="togglePrinter('${br}','${p.id}')" style="cursor:pointer">${p.active!==false?'Active':'Off'}</span>`,
-    `<button class="chip" onclick="editPrinter('${br}','${p.id}')">Edit</button> <button class="chip" onclick="testPrinter('${br}','${p.id}')">Test</button> <button class="chip" style="color:var(--red)" onclick="deletePrinter('${br}','${p.id}')">Delete</button>`
-  ]);
-  const mapRows=PRINTER_STATIONS.map(st=>[`<b>${st}</b>`,mappingSelect(br,st)]).concat([[`<b>Receipt / Counter</b>`,mappingSelect(br,'Receipt')]]);
-  return head('Printer Settings','Branch-wise kitchen, receipt and station printer configuration',`<button class="btn blue" onclick="addPrinter('${br}')">+ Add Printer</button><button class="btn dark" onclick="testKOTPrintForBranch('${br}')">Test KOT</button>`)+
-    singleBranchSelector('kotprinter','Branch')+
-    printerModeNote()+
-    printerStatsHtml(cfg)+
-    `<section class="panel" style="padding:18px;margin-bottom:16px"><h3>${branchNameById(br)} — Printer Controls</h3><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin-top:14px"><button class="btn ${cfg.autoKot?'green':'light'}" onclick="cfgToggle('${br}','autoKot')">${cfg.autoKot?'Auto KOT ON':'Auto KOT OFF'}</button><button class="btn ${cfg.autoReceipt?'green':'light'}" onclick="cfgToggle('${br}','autoReceipt')">${cfg.autoReceipt?'Auto Receipt ON':'Auto Receipt OFF'}</button><div><label style="font-weight:900;font-size:12px;color:var(--muted)">Copies</label><input class="input" type="number" min="1" value="${cfg.copies}" onchange="getPrinterConfig('${br}').copies=Math.max(1,parseInt(this.value)||1);queueSave&&queueSave()"></div></div></section>`+
-    `<section class="panel" style="padding:18px;margin-bottom:16px"><h3>Station Mapping</h3><p style="color:var(--muted);font-size:13px;margin-top:6px">Har station apna alag printer use kar sakta hai. Example: Tandoor → Naan Printer, Main Kitchen → Kitchen Printer.</p><div style="margin-top:12px">${panelTable(['Station / Use','Printer'],mapRows)}</div></section>`+
-    `<section class="panel" style="padding:18px;margin-bottom:16px"><h3>Saved Printers</h3>${rows.length?panelTable(['Printer','Type','Address / System Name','Status','Action'],rows):'<div class="empty">No printer added yet. Click + Add Printer.</div>'}</section>`+
-    panelTable(['Time','Branch','Order','Station','Printer','Status'],kotLogs.slice().reverse().map(l=>[l.time,l.branch||branchNameById(br),l.order,l.station,l.printer,l.status]));
-};
-function cfgToggle(br,key){ const c=getPrinterConfig(br); c[key]=!c[key]; toast((key==='autoKot'?'Auto KOT':'Auto Receipt')+' '+(c[key]?'enabled':'disabled')); render(); }
-function addPrinter(br){ editPrinter(br,null); }
-function editPrinter(br,id){
-  const cfg=getPrinterConfig(br); const p=id?cfg.printers.find(x=>x.id===id):{};
-  openFormModal(id?'Edit Printer':'Add Printer',[
-    {name:'name',label:'Printer Name',value:p.name||'Kitchen Printer',required:true},
-    {name:'role',label:'Printer Use',type:'select',value:p.role||'Kitchen',options:PRINTER_ROLES},
-    {name:'type',label:'Printer Type',type:'select',value:p.type||'WiFi/LAN',options:['WiFi/LAN','USB / Windows Printer','Browser Default']},
-    {name:'ip',label:'WiFi/LAN IP Address',value:p.ip||'192.168.0.147',placeholder:'192.168.0.147'},
-    {name:'port',label:'Port',type:'number',value:p.port||9100},
-    {name:'systemName',label:'Windows Printer Name',value:p.systemName||'Kitchen Printer',placeholder:'Kitchen Printer'},
-    {name:'paper',label:'Paper Size',type:'select',value:p.paper||'80mm',options:['80mm','58mm']},
-    {name:'active',label:'Status',type:'select',value:(p.active!==false?'Active':'Off'),options:['Active','Off']}
-  ],d=>{
-    if(!d.name){toast('Printer name required');return false;}
-    const item={id:id||('PRN'+Date.now()),name:d.name.trim(),role:d.role,type:d.type,ip:(d.ip||'').trim(),port:Number(d.port)||9100,systemName:(d.systemName||'').trim(),paper:d.paper||'80mm',active:d.active==='Active'};
-    if(item.type==='WiFi/LAN' && !item.ip){toast('WiFi printer IP required');return false;}
-    if(id){ const idx=cfg.printers.findIndex(x=>x.id===id); if(idx>=0)cfg.printers[idx]=item; }
-    else{ cfg.printers.push(item); if(!cfg.mappings['Main Kitchen'])cfg.mappings['Main Kitchen']=item.id; }
-    toast(id?'Printer updated':'Printer added');
-  });
-}
-function deletePrinter(br,id){ const cfg=getPrinterConfig(br); const p=cfg.printers.find(x=>x.id===id); if(!p)return; if(!confirm('Delete printer "'+p.name+'"?'))return; cfg.printers=cfg.printers.filter(x=>x.id!==id); Object.keys(cfg.mappings).forEach(k=>{ if(cfg.mappings[k]===id)cfg.mappings[k]=''; }); toast('Printer deleted'); render(); }
-function togglePrinter(br,id){ const p=printerById(br,id); if(!p)return; p.active=p.active===false; toast(p.name+' '+(p.active?'active':'off')); render(); }
-function setPrinterMapping(br,station,id){ getPrinterConfig(br).mappings[station]=id; toast(station+' printer mapped'); if(typeof queueSave==='function')queueSave(); }
-function testPrinter(br,id){ const p=printerById(br,id); const html=`<!doctype html><html><head><title>Printer Test</title><style>body{font-family:Arial;padding:10px}.ticket{width:270px}.c{text-align:center}.line{border-top:1px dashed #000;margin:10px 0}</style></head><body><div class="ticket"><div class="c"><h2>TEST PRINT</h2><b>${restaurantName}</b><br>${branchNameById(br)}<br>${printerLabel(p)}</div><div class="line"></div><p>Printer setting saved successfully.</p><p>Time: ${new Date().toLocaleString()}</p><div class="line"></div><div class="c">Kitchen Printer Test</div></div><script>window.print()<\/script></body></html>`; const w=window.open('','_blank'); if(w){w.document.write(html);w.document.close();} toast('Test print opened'); }
-function testKOTPrintForBranch(br){
-  const sample={no:'#TEST',type:'dine',table:'03',items:[{name:'Chicken Biryani',qty:1,cat:'Rice'},{name:'Plain Naan',qty:2,cat:'Breads'},{name:'Chicken Tikka',qty:1,cat:'Kababs'}]};
-  printKOT(sample,br);
-}
-printKOT=function(o,branchIdOverride){
-  if(!o){toast('No order for KOT');return;}
-  const br=branchIdOverride||currentBranchId||printerBranchId(); const cfg=getPrinterConfig(br);
-  const groups={}; (o.items||[]).forEach(i=>{const st=stationOf(i); (groups[st]=groups[st]||[]).push(i);});
-  Object.keys(groups).forEach(st=>{
-    const pr=printerById(br,cfg.mappings[st]||cfg.mappings['Main Kitchen']); const prName=pr?printerLabel(pr):'Browser Default Printer';
-    kotLogs.push({time:new Date().toLocaleTimeString(),branch:branchNameById(br),order:o.no,station:st,printer:prName,status:'Printed'});
-  });
-  const html=`<!doctype html><html><head><title>KOT ${o.no}</title><style>body{font-family:Arial;padding:8px;color:#000}.ticket{width:270px}.c{text-align:center}.line{border-top:1px dashed #000;margin:8px 0}h2{margin:0;font-size:20px}.item{font-size:16px;margin:8px 0}.note{font-weight:bold;background:#eee;padding:6px;margin-top:8px}@media print{body{margin:0}}</style></head><body>${Object.keys(groups).map(st=>{const pr=printerById(br,cfg.mappings[st]||cfg.mappings['Main Kitchen']);return `<div class="ticket"><div class="c"><h2>KOT ${o.no}</h2><b>${st}</b><br>${branchNameById(br)}<br>${o.table?'Table T'+o.table:typeMeta(o.type)?.l||'Order'}<br>${new Date().toLocaleString()}<br><small>${printerLabel(pr)||'Browser Default'}</small></div><div class="line"></div>${groups[st].map(i=>`<div class="item"><b>${i.qty||1} x ${i.name}</b></div>${i.note?`<div class="note">${i.note}</div>`:''}`).join('')}<div class="line"></div><div class="c">Chef Copy</div></div><div style="page-break-after:always"></div>`}).join('')}<script>window.print()<\/script></body></html>`;
-  const w=window.open('','_blank'); if(w){w.document.write(html);w.document.close();}
-  toast('KOT opened for '+o.no);
-  if(typeof queueSave==='function')queueSave();
-};
-const _printerOldAppState=appState;
-appState=function(){ const s=_printerOldAppState(); s.printerSettings=printerSettings; return s; };
-const _printerOldApplyState=applyState;
-applyState=function(s){ _printerOldApplyState(s); if(s&&s.printerSettings)printerSettings=s.printerSettings; };
-createOrder=function(){
-  if(!cart.length)return; const table=document.getElementById('mtable').value; const o={no:'#'+seq++,inv:uid(),type:cType,table:cType==='dine'?(table||'—'):null,status:'Unpaid',stage:0,age:'just now',items:cart.map(i=>({...i,cat:i.cat||MENU.find(m=>m.id===i.id)?.cat,station:stationOf(i)}))};
-  orders.unshift(o); selNo=o.no; closeModal(); const cfg=getPrinterConfig(currentBranchId||printerBranchId()); if(cfg.autoKot||kotAutoPrint){setTimeout(()=>printKOT(o,currentBranchId||printerBranchId()),100);} else toast('Order '+o.no+' created'); if(nav!=='pos')go('pos'); else render();
-};
-sendWaiterOrder=function(){
-  if(!cart.length)return; const table=(document.getElementById('wtable')?.value||window.wTable||'').trim(); const o={no:'#'+seq++,inv:uid(),type:cType,table:cType==='dine'?(table||'—'):null,status:'Unpaid',stage:0,age:'just now',note:wNote,customer:wCustomer,phone:wPhone,address:wAddress,items:cart.map(i=>({...i,station:stationOf(i)}))};
-  orders.unshift(o); selNo=o.no; const cfg=getPrinterConfig(currentBranchId||printerBranchId()); if(cfg.autoKot||kotAutoPrint){setTimeout(()=>printKOT(o,currentBranchId||printerBranchId()),100);} cart=[]; wNote=''; toast('Order '+o.no+' created'); go('pos');
-};
-/* ===== END PROFESSIONAL MULTI-PRINTER SETTINGS PATCH ===== */
-
 </script>
 </body>
 </html>
