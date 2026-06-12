@@ -319,6 +319,17 @@
   }
   @media(max-width:560px){ .stats{grid-template-columns:1fr} .mgrid{grid-template-columns:1fr 1fr} }
   @media(max-width:900px){ .x{font-size:26px;padding:4px 10px} }
+  /* ===== Mobile bottom navigation (app style) ===== */
+  .bottom-nav{display:none}
+  @media(max-width:900px){
+    .bottom-nav{display:flex;position:fixed;left:0;right:0;bottom:0;height:64px;background:var(--card);border-top:1px solid var(--line);z-index:58;align-items:center;justify-content:space-around;padding:0 4px;box-shadow:0 -4px 20px rgba(0,0,0,.25)}
+    .main{padding-bottom:84px!important}
+    .bn-item{flex:1;background:none;border:none;color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:3px;font-size:10.5px;font-weight:700;cursor:pointer;padding:6px 2px;min-width:0}
+    .bn-item.active{color:#d4af37}
+    .bn-ic{font-size:19px;line-height:1}
+    .bn-plus{flex:0 0 auto}
+    .bn-plus .bn-plus-ic{display:grid;place-items:center;width:54px;height:54px;margin-top:-24px;border-radius:50%;background:linear-gradient(135deg,#e7c873,#caa53a);color:#1a1713;font-size:32px;font-weight:800;box-shadow:0 6px 18px rgba(212,175,55,.55);border:3px solid var(--bg)}
+  }
 
 
   /* ===== DARK LUXURY GOLD THEME ===== */
@@ -676,7 +687,7 @@
   <div class="modal-overlay" id="modal">
     <div class="modal">
       <div class="m-menu">
-        <div class="m-head"><h3>New Order <span style="font-size:10px;font-weight:700;color:var(--muted);vertical-align:middle">v10</span></h3><button class="x" onclick="closeModal()">×</button></div>
+        <div class="m-head"><h3>New Order <span style="font-size:10px;font-weight:700;color:var(--muted);vertical-align:middle">v11</span></h3><button class="x" onclick="closeModal()">×</button></div>
         <div class="m-search"><div class="ssearch">🔍 <input id="msearch" placeholder="Search dish..." oninput="renderMenuGrid()"></div><div class="m-cats" id="mcats"></div></div>
         <div class="mgrid" id="mgrid"></div>
       </div>
@@ -2614,7 +2625,24 @@ renderNav=function(){
   const bl=document.getElementById('brandLogo'); if(bl)bl.innerHTML=logoImg?`<img src="${logoImg}">`:(currentPortal==='hq'?'HQ':currentBranchName.charAt(0));
   const switcher=document.querySelector('.role-switch'); if(switcher) switcher.style.display=currentPortal==='hq'?'none':'flex';
   const logoutBtn=document.querySelector('.logout'); if(logoutBtn){logoutBtn.onclick=logoutPOS; logoutBtn.textContent='⎋ Log Out';}
+  renderBottomNav();
 };
+function renderBottomNav(){
+  const el=document.getElementById('bottomNav'); if(!el)return;
+  let items;
+  if(currentPortal==='hq'){
+    items=[{k:'hqdashboard',l:'Home',i:'🏠'},{k:'reports',l:'Reports',i:'📊'},{k:'branches',l:'Branches',i:'🏢'},{k:'inventory',l:'Stock',i:'📦'},{k:'__more',l:'More',i:'☰'}];
+  } else if(role==='waiter'){
+    items=[{k:'waiter',l:'Orders',i:'🧾'},{k:'tables',l:'Tables',i:'🍽️'},{k:'__new',l:'',i:'+'},{k:'__more',l:'More',i:'☰'}];
+  } else {
+    items=[{k:'pos',l:'Orders',i:'🧾'},{k:'tables',l:'Tables',i:'🍽️'},{k:'__new',l:'',i:'+'},{k:'quickpos',l:'Quick',i:'⚡'},{k:'__more',l:'More',i:'☰'}];
+  }
+  el.innerHTML=items.map(it=>{
+    if(it.k==='__new') return `<button class="bn-item bn-plus" onclick="(typeof openModal==='function'?openModal:go.bind(null,'waiter'))()"><span class="bn-plus-ic">+</span></button>`;
+    if(it.k==='__more') return `<button class="bn-item" onclick="toggleDrawer()"><span class="bn-ic">${it.i}</span><span>${it.l}</span></button>`;
+    return `<button class="bn-item ${nav===it.k?'active':''}" onclick="go('${it.k}')"><span class="bn-ic">${it.i}</span><span>${it.l}</span></button>`;
+  }).join('');
+}
 
 window.render=function(){
   const m=document.getElementById('main'); if(!m)return;
@@ -3013,5 +3041,6 @@ if(role==="waiter"){document.getElementById("roleCashier").classList.remove("act
 if(role==="kitchen"){document.getElementById("roleCashier").classList.remove("active");document.getElementById("roleKitchen")?.classList.add("active");}
 if(role==="tandoor"){document.getElementById("roleCashier").classList.remove("active");document.getElementById("roleTandoor")?.classList.add("active");}
 </script>
+  <nav class="bottom-nav" id="bottomNav"></nav>
 </body>
 </html>
